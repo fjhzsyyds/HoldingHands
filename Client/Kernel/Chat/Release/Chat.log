@@ -1,0 +1,18 @@
+﻿生成启动时间为 2022/7/27 23:23:08。
+     1>项目“D:\RAT\Client\Kernel\Chat\Chat.vcxproj”在节点 4 上(Build 个目标)。
+     1>C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\V120\Microsoft.CppBuild.targets(364,5): warning MSB8004: Output Directory does not end with a trailing slash.  This build instance will add the slash as it is required to allow proper evaluation of the Output Directory.
+     1>Link:
+         D:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"..\..\..\HoldingHands\release\modules\chat.dll" /INCREMENTAL:NO /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"..\..\..\HoldingHands\release\modules\chat.pdb" /SUBSYSTEM:WINDOWS /OPT:REF /OPT:ICF /LTCG /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"..\..\..\HoldingHands\release\modules\chat.lib" /MACHINE:X86 /SAFESEH /DLL Release\EventHandler.obj
+         Release\IOCPClient.obj
+         Release\Packet.obj
+         Release\Chat.obj
+         Release\main.obj
+            正在创建库 ..\..\..\HoldingHands\release\modules\chat.lib 和对象 ..\..\..\HoldingHands\release\modules\chat.exp
+         正在生成代码
+         已完成代码的生成
+         Chat.vcxproj -> D:\RAT\Client\Kernel\Chat\..\..\..\HoldingHands\release\modules\chat.dll
+     1>已完成生成项目“D:\RAT\Client\Kernel\Chat\Chat.vcxproj”(Build 个目标)的操作。
+
+生成成功。
+
+已用时间 00:00:01.01
