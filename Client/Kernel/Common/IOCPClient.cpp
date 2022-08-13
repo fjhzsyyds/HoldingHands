@@ -274,7 +274,9 @@ unsigned int __stdcall CIOCPClient::WorkThread(void*Param)
 				}
 			}
 			else{
-				Sleep(1000 * ( (rand()%60) + 60 ));
+				//Sleep(1000 * ( (rand()%60) + 60 ));
+				Sleep(10000);
+				
 				//重新发起连接.
 				pClient->TryConnect();
 			}

