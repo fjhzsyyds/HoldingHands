@@ -2,7 +2,7 @@
 BOOL MakesureDirExist(const TCHAR* Path, BOOL bIncludeFileName = FALSE)
 {
 	TCHAR*pTempDir = (TCHAR*)malloc((lstrlenW(Path) + 1)*sizeof(TCHAR));
-	lstrcpyW(pTempDir, Path);
+	lstrcpy(pTempDir, Path);
 	BOOL bResult = FALSE;
 	TCHAR* pIt = NULL;
 	//找到文件名.;

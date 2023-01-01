@@ -78,9 +78,6 @@
     <ClInclude Include="FileManagerSrv.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="FileMgrInputNameDlg.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="ChatSrv.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -201,9 +198,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="FileManagerSrv.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="FileMgrInputNameDlg.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="ChatSrv.cpp">

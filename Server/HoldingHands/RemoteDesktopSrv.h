@@ -69,7 +69,7 @@ private:
 	
 	//Event
 	void OnDeskSize(char*DeskSize);
-	void OnError(WCHAR* szError);
+	void OnError(TCHAR* szError);
 	void OnFrame(DWORD dwRead,char*Buffer);
 	//
 	void OnSetClipboardText(char*Text);

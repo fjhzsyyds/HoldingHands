@@ -93,7 +93,7 @@ void CAudioSrv::OnAudioData(char*Buffer, DWORD dwLen)
 	{
 		if (FALSE == AudioOutInit())
 		{
-			WCHAR szError[] = L"AudioOutInit Failed!";
+			TCHAR szError[] = L"AudioOutInit Failed!";
 			m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
 			Close();
 			return;
@@ -110,7 +110,7 @@ void CAudioSrv::OnAudioData(char*Buffer, DWORD dwLen)
 
 	if (dwLen > LEN_PER_BUFF)
 	{
-		WCHAR szError[] = L"Buffer Overflow!";
+		TCHAR szError[] = L"Buffer Overflow!";
 		m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
 		return;
 	}
@@ -120,14 +120,14 @@ void CAudioSrv::OnAudioData(char*Buffer, DWORD dwLen)
 	mmResult = waveOutPrepareHeader(m_hWaveOut, &m_hdrs[m_Idx], sizeof(WAVEHDR));
 	if (mmResult != MMSYSERR_NOERROR)
 	{
-		WCHAR szError[] = L"waveOutPrepareHeader Failed!";
+		TCHAR szError[] = L"waveOutPrepareHeader Failed!";
 		m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
 		return;
 	}
 	mmResult = waveOutWrite(m_hWaveOut, &m_hdrs[m_Idx], sizeof(WAVEHDR));
 	if (mmResult != MMSYSERR_NOERROR)
 	{
-		WCHAR szError[] = L"waveOutWrite Failed!";
+		TCHAR szError[] = L"waveOutWrite Failed!";
 		m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
 		return;
 	}
@@ -141,14 +141,14 @@ void CAudioSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 		OnAudioData(Buffer, dwSize);
 		break;
 	case AUDIO_ERROR:
-		OnAudioError((WCHAR*)Buffer);
+		OnAudioError((TCHAR*)Buffer);
 		break;
 	default:
 		break;
 	}
 }
 
-void CAudioSrv::OnAudioError(WCHAR*szError)
+void CAudioSrv::OnAudioError(TCHAR*szError)
 {
 	m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
 }

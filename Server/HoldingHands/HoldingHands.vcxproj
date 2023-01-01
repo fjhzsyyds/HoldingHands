@@ -127,7 +127,6 @@
     <ClInclude Include="MsgHandler.h" />
     <ClInclude Include="FileManagerDlg.h" />
     <ClInclude Include="FileManagerSrv.h" />
-    <ClInclude Include="FileMgrInputNameDlg.h" />
     <ClInclude Include="FileMgrSearchDlg.h" />
     <ClInclude Include="FileMgrSearchSrv.h" />
     <ClInclude Include="FileSelectDlg.h" />
@@ -171,7 +170,6 @@
     <ClCompile Include="MsgHandler.cpp" />
     <ClCompile Include="FileManagerDlg.cpp" />
     <ClCompile Include="FileManagerSrv.cpp" />
-    <ClCompile Include="FileMgrInputNameDlg.cpp" />
     <ClCompile Include="FileMgrSearchDlg.cpp" />
     <ClCompile Include="FileMgrSearchSrv.cpp" />
     <ClCompile Include="FileSelectDlg.cpp" />

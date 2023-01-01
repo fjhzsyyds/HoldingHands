@@ -30,7 +30,6 @@
 #define IDI_FM_SEARCH                   332
 #define IDI_FM_UP                       333
 #define IDI_FM_VIEW                     334
-#define IDD_FILE_NAME_DLG               336
 #define IDD_FM_SEARCH_DLG               337
 #define IDR_RD_MENU                     338
 #define IDD_DIALOG1                     339
@@ -70,7 +69,6 @@
 #define IDC_COMBO4                      1020
 #define IDC_URL                         1022
 #define IDC_FILE_NAME                   1023
-#define IDC_FILE_NAME2                  1024
 #define IDC_PROGRESS                    1024
 #define ID_MAIN                         32771
 #define ID_MAIN_STARTSERVER             32772

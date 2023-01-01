@@ -93,7 +93,7 @@ unsigned int __stdcall CSearchFile::WorkerThread(void*Param)
 		pCurDir = (TCHAR*)msg.wParam;
 		CurDirNameLen = lstrlenW(pCurDir);
 		pFirstFileName = (TCHAR*)malloc(sizeof(TCHAR)* (CurDirNameLen + 3));
-		lstrcpyW(pFirstFileName, pCurDir);
+		lstrcpy(pFirstFileName, pCurDir);
 		*(pFirstFileName + CurDirNameLen) = L'\\';
 		*(pFirstFileName + CurDirNameLen + 1) = L'*';
 		*(pFirstFileName + CurDirNameLen + 2) = 0;
@@ -115,9 +115,9 @@ unsigned int __stdcall CSearchFile::WorkerThread(void*Param)
 
 					pTemp = (TCHAR*)malloc(sizeof(TCHAR) * (CurDirNameLen + 1 + NameLen + 1));
 
-					lstrcpyW(pTemp, pCurDir);
+					lstrcpy(pTemp, pCurDir);
 					*(pTemp + CurDirNameLen) = L'\\';
-					lstrcpyW(pTemp + CurDirNameLen + 1, fd.cFileName);
+					lstrcpy(pTemp + CurDirNameLen + 1, fd.cFileName);
 					
 					pThis->Push(pTemp);
 				}
@@ -190,7 +190,7 @@ void CSearchFile::MasterThread(CSearchFile*pThis)
 				int StartDirLen = lstrlenW(pThis->m_DestFile.StartDir);
 				LPWSTR StartDir = (TCHAR*)malloc(sizeof(TCHAR) * (StartDirLen + 1));
 
-				lstrcpyW(StartDir, pThis->m_DestFile.StartDir);
+				lstrcpy(StartDir, pThis->m_DestFile.StartDir);
 				pThis->Push(StartDir);
 				
 				//初始化相关参数
@@ -312,8 +312,8 @@ int CSearchFile::Search(LPWSTR DestFileName, LPWSTR StartDir, DWORD FileAttribs,
 	//开始查找文件
 	ResetEvent(m_hSearchEnd);
 	//设置初始信息
-	lstrcpyW(m_DestFile.FileName, DestFileName);
-	lstrcpyW(m_DestFile.StartDir, StartDir);
+	lstrcpy(m_DestFile.FileName, DestFileName);
+	lstrcpy(m_DestFile.StartDir, StartDir);
 	m_DestFile.FileAttrib = FileAttribs;
 	
 	m_pCallbakcAfterFind = pfun1;

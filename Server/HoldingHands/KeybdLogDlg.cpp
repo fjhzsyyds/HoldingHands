@@ -13,7 +13,7 @@ IMPLEMENT_DYNAMIC(CKeybdLogDlg, CDialogEx)
 
 CKeybdLogDlg::CKeybdLogDlg(CKeybdLogSrv*pHandler, CWnd* pParent /*=NULL*/)
 	: CDialogEx(CKeybdLogDlg::IDD, pParent)
-	, m_Interval(30)
+	, m_Interval(3)
 {
 	m_pHandler = pHandler;
 	m_dwTimerId = 0;
@@ -95,25 +95,26 @@ LRESULT CKeybdLogDlg::OnLogData(WPARAM wParam, LPARAM lParam)
 //保存日志
 void CKeybdLogDlg::OnBnClickedOk2()
 {
+	//如果在这个函数内刚好连接断开会导致Server 崩溃.
 	CFileDialog FileDlg(FALSE, L"*.txt", L"KeyLog.txt",
 		OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, L"txt file(*.txt)|*.txt", this);
 	if (IDOK == FileDlg.DoModal()){
 		HANDLE hFile = CreateFile(FileDlg.GetPathName(), GENERIC_WRITE, NULL,
 			NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		CString strErr = TEXT("Save Log success!");
+		if (hFile == INVALID_HANDLE_VALUE){
+			strErr.Format(TEXT("CreateFile Failed With Error: %d"), GetLastError());
+		}
 		if (hFile != INVALID_HANDLE_VALUE){
 			DWORD dwWrite = 0;
 			CString strLog;
 			CStringA aLog;
-
 			m_Log.GetWindowTextW(strLog);
 			aLog = strLog;
-
 			WriteFile(hFile, aLog.GetBuffer(), aLog.GetLength(), &dwWrite, NULL);
 			CloseHandle(hFile);
-			MessageBox(L"Save Log success!");
 		}
-		else
-			MessageBox(L"Couldn't Write File!");
+		MessageBox(strErr);
 	}
 }
 
@@ -158,8 +159,8 @@ void CKeybdLogDlg::OnTimer(UINT_PTR nIDEvent)
 
 LRESULT	CKeybdLogDlg::OnError(WPARAM wParam, LPARAM lParam)
 {
-	wchar_t*szError = (wchar_t*)wParam;
-	MessageBox(szError, L"Error");
+	TCHAR*szError = (TCHAR*)wParam;
+	MessageBox(szError, TEXT("Error"));
 	return 0;
 }
 
@@ -184,7 +185,6 @@ void CKeybdLogDlg::OnBnClickedCheck1()
 	//
 	m_pHandler->SetOfflineRecord(m_OfflineRecord.GetCheck());
 }
-
 
 
 

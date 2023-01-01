@@ -80,7 +80,7 @@ void CKeybdLogSrv::OnReadMsg(WORD Msg,  DWORD dwSize, char*Buffer){
 	switch (Msg)
 	{
 	case KEYBD_LOG_ERROR:
-		OnLogError((wchar_t*)Buffer);
+		OnLogError((TCHAR*)Buffer);
 		break;
 	case KEYBD_LOG_DATA_APPEND:
 		OnLogData(Buffer,TRUE);
@@ -115,7 +115,7 @@ void CKeybdLogSrv::SetOfflineRecord(BOOL bOfflineRecord)
 }
 
 //
-void CKeybdLogSrv::OnLogError(wchar_t*szError){
+void CKeybdLogSrv::OnLogError(TCHAR*szError){
 	m_pDlg->SendMessage(WM_KEYBD_LOG_ERROR, (WPARAM)(szError), 0);
 	Close();
 }

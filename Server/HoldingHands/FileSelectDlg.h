@@ -32,4 +32,5 @@ public:
 	afx_msg void OnLvnDeleteallitemsMfcshelllist1(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnBnClickedOk();
 	CEdit m_SelFiles;
+	afx_msg void OnTvnSelchangedMfcshelltree1(NMHDR *pNMHDR, LRESULT *pResult);
 };

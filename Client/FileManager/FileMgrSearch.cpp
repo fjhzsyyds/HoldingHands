@@ -54,9 +54,9 @@ void OnFoundFile(TCHAR* path, WIN32_FIND_DATAW* pfd, LPVOID Param)
 	FindFile*pFindFile = (FindFile*)malloc(dwLen);
 
 	pFindFile->dwFileAttribute = pFindFile->dwFileAttribute;
-	lstrcpyW(pFindFile->szFileName, path);
-	lstrcatW(pFindFile->szFileName, L"\n");
-	lstrcatW(pFindFile->szFileName, pfd->cFileName);
+	lstrcpy(pFindFile->szFileName, path);
+	lstrcat(pFindFile->szFileName, L"\n");
+	lstrcat(pFindFile->szFileName, pfd->cFileName);
 
 	pMgrSearch->SendMsg(FILE_MGR_SEARCH_FOUND, (char*)pFindFile, dwLen);
 	free(pFindFile);

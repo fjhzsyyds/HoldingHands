@@ -65,9 +65,9 @@ void CFileMgrSearchSrv::OnOver()
 	m_pDlg->SendMessage(WM_FILE_MGR_SEARCH_OVER, 0, 0);
 }
 
-void CFileMgrSearchSrv::Search(WCHAR*szParams)
+void CFileMgrSearchSrv::Search(TCHAR*szParams)
 {
-	SendMsg(FILE_MGR_SEARCH_SEARCH, (char*)szParams, (sizeof(WCHAR) * (wcslen(szParams) + 1)));
+	SendMsg(FILE_MGR_SEARCH_SEARCH, (char*)szParams, (sizeof(TCHAR) * (lstrlen(szParams) + 1)));
 }
 
 void CFileMgrSearchSrv::Stop()

@@ -19,7 +19,7 @@ class CChatSrv :
 {
 public:
 	CChatDlg*	m_pDlg;
-	WCHAR		m_szNickName[128];
+	TCHAR		m_szNickName[128];
 
 
 
@@ -36,7 +36,7 @@ public:
 	void OnChatMsg(DWORD dwRead, char*szbuffer);
 
 
-	void SendMsgMsg(WCHAR*szMsg);
+	void SendMsgMsg(TCHAR*szMsg);
 	CChatSrv(CManager*pManager);
 	~CChatSrv();
 };

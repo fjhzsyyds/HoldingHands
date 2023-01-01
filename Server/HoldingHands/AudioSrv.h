@@ -34,7 +34,7 @@ public:
 	void OnClose();
 	void OnAudioData(char*Buffer,DWORD dwLen);
 
-	void OnAudioError(WCHAR*szError);
+	void OnAudioError(TCHAR*szError);
 
 	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
 	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer) { }; 

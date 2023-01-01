@@ -31,7 +31,7 @@ public:
 	void OnFound(char*Buffer);
 	void OnOver();
 
-	void Search(WCHAR*szParams);
+	void Search(TCHAR*szParams);
 	void Stop();
 
 	CFileMgrSearchSrv(CManager*pManager);

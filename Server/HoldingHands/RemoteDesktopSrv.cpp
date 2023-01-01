@@ -116,7 +116,7 @@ void CRemoteDesktopSrv::OnDeskSize(char*DeskSize)
 	NextFrame();
 	m_pWnd->SendMessage(WM_REMOTE_DESKTOP_SIZE, m_Bmp.bmWidth, m_Bmp.bmHeight);
 }
-void CRemoteDesktopSrv::OnError(WCHAR*szError)
+void CRemoteDesktopSrv::OnError(TCHAR*szError)
 {
 	//×ÀÃæ²É¼¯Ê§°Ü.
 	m_pWnd->SendMessage(WM_REMOTE_DESKTOP_ERROR, (WPARAM)szError, 0);
@@ -221,7 +221,7 @@ void CRemoteDesktopSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 	switch (Msg)
 	{
 	case REMOTEDESKTOP_ERROR:
-		OnError((WCHAR*)Buffer);
+		OnError((TCHAR*)Buffer);
 		break;
 	case REMOTEDESKTOP_DESKSIZE:
 		OnDeskSize(Buffer);

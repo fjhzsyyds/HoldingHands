@@ -3,13 +3,13 @@
 
 BOOL MakesureDirExist(const TCHAR* Path, BOOL bIncludeFileName = FALSE)
 {
-	TCHAR*pTempDir = (TCHAR*)malloc((lstrlenW(Path) + 1)*sizeof(TCHAR));
-	lstrcpyW(pTempDir, Path);
+	TCHAR*pTempDir = (TCHAR*)malloc((lstrlen(Path) + 1)*sizeof(TCHAR));
+	lstrcpy(pTempDir, Path);
 	BOOL bResult = FALSE;
 	TCHAR* pIt = NULL;
 	//找到文件名.;
 	if (bIncludeFileName){
-		pIt = pTempDir + lstrlenW(pTempDir) - 1;
+		pIt = pTempDir + lstrlen(pTempDir) - 1;
 		while (pIt[0] != '\\' && pIt[0] != '/' && pIt > pTempDir) pIt--;
 		if (pIt[0] != '/' && pIt[0] != '\\')
 			goto Return;

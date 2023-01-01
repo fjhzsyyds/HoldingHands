@@ -35,6 +35,7 @@ BEGIN_MESSAGE_MAP(CFileSelectDlg, CDialogEx)
 	ON_NOTIFY(LVN_ITEMCHANGED, IDC_MFCSHELLLIST1, &CFileSelectDlg::OnLvnItemchangedMfcshelllist1)
 	ON_NOTIFY(LVN_DELETEALLITEMS, IDC_MFCSHELLLIST1, &CFileSelectDlg::OnLvnDeleteallitemsMfcshelllist1)
 	ON_BN_CLICKED(IDOK, &CFileSelectDlg::OnBnClickedOk)
+	ON_NOTIFY(TVN_SELCHANGED, IDC_MFCSHELLTREE1, &CFileSelectDlg::OnTvnSelchangedMfcshelltree1)
 END_MESSAGE_MAP()
 
 
@@ -49,8 +50,9 @@ BOOL CFileSelectDlg::OnInitDialog()
 	// TODO:  在此添加额外的初始化
 	
 	m_List.DeleteAllItems();
-	m_Tree.SetRelatedList(&m_List);
 
+	m_List.ModifyStyle(LVS_TYPEMASK, LVS_ICON );			//风格????
+	m_Tree.SetRelatedList(&m_List);
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常:  OCX 属性页应返回 FALSE
 }
@@ -63,30 +65,45 @@ void CFileSelectDlg::OnLvnItemchangedMfcshelllist1(NMHDR *pNMHDR, LRESULT *pResu
 	*pResult = 0;
 	CString Text;
 	//被选择了
+	
+	CString FilePath;
+	CString FileName(FilePath);
+
+	if (m_List.m_hWnd && pNMLV->iItem >= 0){
+		m_List.GetItemPath(FilePath, pNMLV->iItem);			//要获取拓展名....
+		if (FilePath.GetLength()){
+			TCHAR * pFileName = FilePath.GetBuffer() + FilePath.GetLength() - 1;
+			while (pFileName >= FilePath.GetBuffer() && *pFileName != '\\'){
+				--pFileName;
+			}
+			if (pFileName >= FilePath.GetBuffer()){
+				FileName = (pFileName + 1);
+			}
+		}
+	}
+
 	if (!(pNMLV->uOldState &LVIS_SELECTED ) && (pNMLV->uNewState &LVIS_SELECTED))
 	{
-		m_MapFileList.SetAt(m_List.GetItemText(pNMLV->iItem, 0), 0);
+		m_MapFileList.SetAt(FileName, 0);
 		POSITION pos = m_MapFileList.GetStartPosition();
-		while (pos)
-		{
+		while (pos){
 			CString Key; void* value;
 			m_MapFileList.GetNextAssoc(pos, Key, value);
-			Text += L"\"" + Key + L"\" ";
+			Text += TEXT("\"") + Key + TEXT("\" ");
 		}
-		m_SelFiles.SetWindowTextW(Text);
+		m_SelFiles.SetWindowText(Text);
 	}
 	//被取消了
 	else if (!(pNMLV->uNewState &LVIS_SELECTED )&& (pNMLV->uOldState &LVIS_SELECTED))
 	{
-		m_MapFileList.RemoveKey(m_List.GetItemText(pNMLV->iItem, 0));
+		m_MapFileList.RemoveKey(FileName);
 		POSITION pos = m_MapFileList.GetStartPosition();
-		while (pos)
-		{
+		while (pos){
 			CString Key; void* value;
 			m_MapFileList.GetNextAssoc(pos, Key, value);
-			Text += L"\"" + Key + L"\"";
+			Text += TEXT("\"") + Key + TEXT("\"");
 		}
-		m_SelFiles.SetWindowTextW(Text);
+		m_SelFiles.SetWindowText(Text);
 	}
 }
 
@@ -97,8 +114,7 @@ void CFileSelectDlg::OnLvnDeleteallitemsMfcshelllist1(NMHDR *pNMHDR, LRESULT *pR
 	// TODO:  在此添加控件通知处理程序代码
 	*pResult = 0;
 	//在没有创建edit之前也会调用这个函数mmp.
-	if (m_SelFiles.m_hWnd)
-	{
+	if (m_SelFiles.m_hWnd){
 		m_MapFileList.RemoveAll();
 		m_SelFiles.SetWindowTextW(L"");
 	}
@@ -111,6 +127,13 @@ void CFileSelectDlg::OnBnClickedOk()
 	CString CurDir;
 	if (m_List.GetCurrentFolder(CurDir))
 	{
+		/*
+			目录
+			文件1
+			文件2
+			....
+		*/
+
 		m_FileList = CurDir;
 		m_FileList += "\n";
 
@@ -128,4 +151,12 @@ void CFileSelectDlg::OnBnClickedOk()
 	else
 		m_FileList = L"";		//没有路径
 	CDialogEx::OnOK();
+}
+
+
+void CFileSelectDlg::OnTvnSelchangedMfcshelltree1(NMHDR *pNMHDR, LRESULT *pResult)
+{
+	LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
+	// TODO:  在此添加控件通知处理程序代码
+	*pResult = 0;
 }

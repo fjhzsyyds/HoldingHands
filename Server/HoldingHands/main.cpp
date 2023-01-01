@@ -10,7 +10,7 @@ DWORD AcceptCount = 0;
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	wchar_t Text[256];
+	TCHAR Text[256];
 	switch (uMsg)
 	{
 	case WM_CREATE:

@@ -22,7 +22,7 @@ void CChatSrv::OnOpen()
 	dlg.DoModal();
 	if (dlg.m_NickName.GetLength() != 0)
 	{
-		lstrcpyW(m_szNickName,dlg.m_NickName);
+		lstrcpy(m_szNickName,dlg.m_NickName);
 	}
 	m_pDlg = new CChatDlg(this);
 	if (m_pDlg->Create(IDD_CHAT_DLG,CWnd::GetDesktopWindow()) == FALSE)
@@ -55,7 +55,7 @@ void CChatSrv::OnChatInit(DWORD dwRead, char*szBuffer)
 	if (dwStatu)
 	{
 		//¿ªÊ¼ÁÄÌì
-		SendMsg(CHAT_BEGIN, (char*)m_szNickName, sizeof(WCHAR)*((wcslen(m_szNickName)+1)));
+		SendMsg(CHAT_BEGIN, (char*)m_szNickName, sizeof(TCHAR)*((lstrlen(m_szNickName)+1)));
 		m_pDlg->GetDlgItem(IDOK)->EnableWindow(TRUE);
 	}
 	else
@@ -92,7 +92,7 @@ void CChatSrv::OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer)
 
 }
 
-void CChatSrv::SendMsgMsg(WCHAR*szMsg)
+void CChatSrv::SendMsgMsg(TCHAR*szMsg)
 {
-	SendMsg(CHAT_MSG, (char*)szMsg, sizeof(WCHAR)*(wcslen(szMsg) + 1));
+	SendMsg(CHAT_MSG, (char*)szMsg, sizeof(TCHAR)*(lstrlen(szMsg) + 1));
 }

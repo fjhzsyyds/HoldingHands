@@ -33,10 +33,13 @@
 #define FILE_MGR_PREV_UPLOADFRURL		0x1102
 #define FILE_MGR_PREV_DOWNLOAD			0x1103
 
-#define FILE_MGR_PREV_NEWFOLDER			0x1104
 #define FILE_MGR_PREV_RENAME			0x1105
 
+#define FILE_MGR_NEW_FOLDER_SUCCESS		(0x1106)
 
+#define FILE_MGR_ERROR					(0x1107)
+
+#define FILE_MGR_ECHO					(0x1fff)
 
 class CFileManagerDlg;
 
@@ -47,41 +50,39 @@ public:
 	CFileManagerDlg *m_pDlg;
 
 	void OnClose();					//当socket断开的时候调用这个函数
-	void OnOpen();				//当socket连接的时候调用这个函数
+	void OnOpen();					//当socket连接的时候调用这个函数
 
 	//有数据到达的时候调用这两个函数.
 	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
 	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer);
 
-
-
 	void OnChangeDirRet(DWORD dwRead,char*buffer);
 	void OnGetListRet(DWORD dwRead, char*buffer);
 
+	void Echo(WORD Msg);
 
 	void Up();
 	void Refresh();
-	void NewFolder(WCHAR*szName);
-	void Rename(WCHAR*szNames);
-	void ChDir(WCHAR*szNewDir);
+	void NewFolder();
+	void Rename(TCHAR*szNames);
+	void ChDir(TCHAR*szNewDir);
 	void Search();
 
-	void Delete(WCHAR*szFileList);
-	void Copy(WCHAR*szFileList);
-	void Cut(WCHAR*szFileList);
+	void Delete(TCHAR*szFileList);
+	void Copy(TCHAR*szFileList);
+	void Cut(TCHAR*szFileList);
 	void Paste();
 
 	void PrevUploadFromUrl();
 	void PrevUploadFromDisk();
 	void PrevDownload();
-	void PrevRename();
-	void PrevNewFolder();
 
-	void UploadFromUrl(WCHAR*szUrl);
-	void UploadFromDisk(WCHAR*szFileList);
-	void Download(WCHAR*szFileList);
-	void RunFileNormal(WCHAR*szFileList);
-	void RunFileHide(WCHAR*szFileList);
+
+	void UploadFromUrl(TCHAR*szUrl);
+	void UploadFromDisk(TCHAR*szFileList);
+	void Download(TCHAR*szFileList);
+	void RunFileNormal(TCHAR*szFileList);
+	void RunFileHide(TCHAR*szFileList);
 	CFileManagerSrv(CManager*pManager);
 	~CFileManagerSrv();
 };

@@ -60,8 +60,9 @@ void CFileManagerSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 	case FILE_MGR_PREV_UPLOADFRURL:
 		m_pDlg->SendMessage(WM_FMDLG_PREV_UPLOAD_FROMURL, 0, 0);
 		break;
-	case FILE_MGR_PREV_NEWFOLDER:
-		m_pDlg->SendMessage(WM_FMDLG_PREV_NEWFOLDER, 0, 0);
+		//
+	case FILE_MGR_NEW_FOLDER_SUCCESS:
+		m_pDlg->SendMessage(WM_FMDLG_NEWFOLDER_SUCCESS, (WPARAM)Buffer, 0);
 		break;
 	case FILE_MGR_PREV_RENAME:
 		m_pDlg->SendMessage(WM_FMDLG_PREV_RENAME, 0, 0);
@@ -100,64 +101,63 @@ void CFileManagerSrv::Up(){
 void CFileManagerSrv::Refresh(){
 	SendMsg(FILE_MGR_REFRESH, 0, 0);
 }
-void CFileManagerSrv::NewFolder(WCHAR*szName){
-	SendMsg(FILE_MGR_NEWFOLDER, (char*)szName, sizeof(WCHAR)*(wcslen(szName) + 1));
+void CFileManagerSrv::NewFolder(){
+	SendMsg(FILE_MGR_NEWFOLDER, 0 , 0);
 }
 
-void CFileManagerSrv::Rename(WCHAR*szNames){
-	SendMsg(FILE_MGR_RENAME, (char*)szNames, sizeof(WCHAR)*(wcslen(szNames) + 1));
+void CFileManagerSrv::Rename(TCHAR*szNames){
+	SendMsg(FILE_MGR_RENAME, (char*)szNames, sizeof(TCHAR)*(lstrlen(szNames) + 1));
 }
 
-void CFileManagerSrv::ChDir(WCHAR*szNewDir){
-	SendMsg(FILE_MGR_CHDIR, (char*)szNewDir, sizeof(WCHAR)*(wcslen(szNewDir) + 1));
+void CFileManagerSrv::ChDir(TCHAR*szNewDir){
+	SendMsg(FILE_MGR_CHDIR, (char*)szNewDir, sizeof(TCHAR)*(lstrlen(szNewDir) + 1));
 }
 
-void CFileManagerSrv::Delete(WCHAR*szFileList){
-	SendMsg(FILE_MGR_DELETE, (char*)szFileList, sizeof(WCHAR)*(wcslen(szFileList) + 1));
+void CFileManagerSrv::Delete(TCHAR*szFileList){
+	SendMsg(FILE_MGR_DELETE, (char*)szFileList, sizeof(TCHAR)*(lstrlen(szFileList) + 1));
 }
 
-void CFileManagerSrv::Copy(WCHAR*szFileList){
-	SendMsg(FILE_MGR_COPY, (char*)szFileList, sizeof(WCHAR)*(wcslen(szFileList) + 1));
+void CFileManagerSrv::Copy(TCHAR*szFileList){
+	SendMsg(FILE_MGR_COPY, (char*)szFileList, sizeof(TCHAR)*(lstrlen(szFileList) + 1));
 }
-void CFileManagerSrv::Cut(WCHAR*szFileList){
-	SendMsg(FILE_MGR_CUT, (char*)szFileList, sizeof(WCHAR)*(wcslen(szFileList) + 1));
+void CFileManagerSrv::Cut(TCHAR*szFileList){
+	SendMsg(FILE_MGR_CUT, (char*)szFileList, sizeof(TCHAR)*(lstrlen(szFileList) + 1));
 }
 void CFileManagerSrv::Paste(){
 	SendMsg(FILE_MGR_PASTE, 0, 0);
 }
 
 
-void CFileManagerSrv::UploadFromUrl(WCHAR*szUrl){
-	SendMsg(FILE_MGR_UPLOADFRURL, (char*)szUrl, sizeof(WCHAR) * (wcslen(szUrl) + 1));
+void CFileManagerSrv::UploadFromUrl(TCHAR*szUrl){
+	SendMsg(FILE_MGR_UPLOADFRURL, (char*)szUrl, sizeof(TCHAR) * (lstrlen(szUrl) + 1));
 }
 
-void CFileManagerSrv::UploadFromDisk(WCHAR*szFileList){
-	SendMsg(FILE_MGR_UPLOADFROMDISK, (char*)szFileList, sizeof(WCHAR) * (wcslen(szFileList) + 1));
+void CFileManagerSrv::UploadFromDisk(TCHAR*szFileList){
+	SendMsg(FILE_MGR_UPLOADFROMDISK, (char*)szFileList, sizeof(TCHAR) * (lstrlen(szFileList) + 1));
 }
 
-void CFileManagerSrv::Download(WCHAR*szFileList){
-	SendMsg(FILE_MGR_DOWNLOAD, (char*)szFileList, sizeof(WCHAR) * (wcslen(szFileList) + 1));
+void CFileManagerSrv::Download(TCHAR*szFileList){
+	SendMsg(FILE_MGR_DOWNLOAD, (char*)szFileList, sizeof(TCHAR) * (lstrlen(szFileList) + 1));
 }
 
-void CFileManagerSrv::RunFileNormal(WCHAR*szFileList){
-	SendMsg(FILE_MGR_RUNFILE_NORMAL, (char*)szFileList, sizeof(WCHAR)*(wcslen(szFileList) + 1));
+void CFileManagerSrv::RunFileNormal(TCHAR*szFileList){
+	SendMsg(FILE_MGR_RUNFILE_NORMAL, (char*)szFileList, sizeof(TCHAR)*(lstrlen(szFileList) + 1));
 }
-void CFileManagerSrv::RunFileHide(WCHAR*szFileList){
-	SendMsg(FILE_MGR_RUNFILE_HIDE, (char*)szFileList, sizeof(WCHAR)*(wcslen(szFileList) + 1));
+void CFileManagerSrv::RunFileHide(TCHAR*szFileList){
+	SendMsg(FILE_MGR_RUNFILE_HIDE, (char*)szFileList, sizeof(TCHAR)*(lstrlen(szFileList) + 1));
 }
 
 void CFileManagerSrv::PrevUploadFromUrl(){
-	SendMsg(FILE_MGR_PREV_UPLOADFRURL, 0, 0);
+	Echo(FILE_MGR_PREV_UPLOADFRURL);
 }
 void CFileManagerSrv::PrevUploadFromDisk(){
-	SendMsg(FILE_MGR_PREV_UPLOADFROMDISK, 0, 0);
+	Echo(FILE_MGR_PREV_UPLOADFROMDISK);
 }
 void CFileManagerSrv::PrevDownload(){
-	SendMsg(FILE_MGR_PREV_DOWNLOAD, 0, 0);
+	Echo(FILE_MGR_PREV_DOWNLOAD);
 }
-void CFileManagerSrv::PrevRename(){
-	SendMsg(FILE_MGR_PREV_RENAME, 0, 0);
-}
-void CFileManagerSrv::PrevNewFolder(){
-	SendMsg(FILE_MGR_PREV_NEWFOLDER, 0, 0);
+
+
+void CFileManagerSrv::Echo(WORD Msg){
+	SendMsg(FILE_MGR_ECHO, (char*)&Msg, sizeof(WORD));
 }

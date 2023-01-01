@@ -36,7 +36,13 @@
 #define FILE_MGR_PREV_DOWNLOAD			0x1103
 
 #define FILE_MGR_PREV_NEWFOLDER			0x1104
-#define FILE_MGR_PREV_RENAME			0x1105
+
+
+#define FILE_MGR_NEW_FOLDER_SUCCESS		(0x1106)
+
+#define FILE_MGR_ERROR					(0x1107)
+
+#define FILE_MGR_ECHO					(0x1fff)
 
 class CModuleMgr;
 class CManager;
@@ -109,7 +115,7 @@ public:
 	void OnUploadFromDisk(char*Buffer);
 	void OnDownload(char*buffer);
 	void OnRunFile(DWORD Event, char*buffer);
-	void OnNewFolder(char*buffer);
+	void OnNewFolder();
 	void OnRename(char*buffer);
 	void OnDelete(char*buffer);
 	void OnCopy(char*buffer);

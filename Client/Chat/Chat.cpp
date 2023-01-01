@@ -55,9 +55,9 @@ LRESULT CALLBACK CChat::DlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 				pChat->SendMsg(CHAT_MSG,(char*)buffer,sizeof(TCHAR)*(lstrlenW(buffer) + 1));
 
 				//把自己发送的内容显示到屏幕上;
-				lstrcatW(Msg, L"[me]:");
-				lstrcatW(Msg, buffer);
-				lstrcatW(Msg, L"\r\n");
+				lstrcat(Msg, L"[me]:");
+				lstrcat(Msg, buffer);
+				lstrcat(Msg, L"\r\n");
 				SendMessageW(hMsgList, EM_SETSEL, -1, 0);
 				SendMessageW(hMsgList, EM_REPLACESEL, FALSE, (LPARAM)Msg);
 			}
@@ -208,10 +208,10 @@ void CChat::OnChatMsg(DWORD dwRead, char*szBuffer)
 		HWND hCtrl = GetDlgItem(m_hDlg, ID_MSGLIST);
 		//末尾追加数据.;
 		Msg[0] = '[';
-		lstrcatW(Msg, m_szPeerName);
-		lstrcatW(Msg, L"]:");
-		lstrcatW(Msg, (TCHAR*)szBuffer);
-		lstrcatW(Msg,L"\r\n");
+		lstrcat(Msg, m_szPeerName);
+		lstrcat(Msg, L"]:");
+		lstrcat(Msg, (TCHAR*)szBuffer);
+		lstrcat(Msg,L"\r\n");
 		SendMessageW(hCtrl, EM_SETSEL, -1, 0);
 		SendMessageW(hCtrl, EM_REPLACESEL, FALSE, (LPARAM)Msg);
 	}

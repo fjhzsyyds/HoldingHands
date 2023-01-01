@@ -67,7 +67,7 @@ public:
 	void Start(const string& device, int dwFormat,int bitcount, int dwWidth, int dwHeight);
 	void Stop();
 	void ScreenShot();
-	void OnError(WCHAR*szError);
+	void OnError(TCHAR*szError);
 
 	CCameraSrv(CManager*pManager);
 	~CCameraSrv();

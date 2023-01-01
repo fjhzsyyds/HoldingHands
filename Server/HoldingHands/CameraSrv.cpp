@@ -75,7 +75,7 @@ void CCameraSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 		OnScreenShot();
 		break;
 	case CAMERA_ERROR:
-		OnError((WCHAR*)Buffer);
+		OnError((TCHAR*)Buffer);
 		break;
 	case CAMERA_STOP_OK:
 		OnStopOk();
@@ -230,7 +230,7 @@ void CCameraSrv::OnScreenShot()
 	m_pDlg->SendMessage(WM_CAMERA_SCREENSHOT, 0, 0);
 }
 
-void CCameraSrv::OnError(WCHAR*szError)
+void CCameraSrv::OnError(TCHAR*szError)
 {
 	m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)szError, 0);
 }

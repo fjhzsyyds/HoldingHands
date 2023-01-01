@@ -94,14 +94,14 @@ private:
 public:
 	CString GetLocation();;
 
-	void EditComment(WCHAR *Comment);
+	void EditComment(TCHAR *Comment);
 	void Power_Reboot();
 	void Power_Shutdown();
 	void Restart();
 
 	void OnError(TCHAR * Error);
-	void UploadModuleFromDisk(WCHAR* Path);
-	void UploadModuleFromUrl(WCHAR* Url);
+	void UploadModuleFromDisk(TCHAR* Path);
+	void UploadModuleFromUrl(TCHAR* Url);
 
 	void BeginCmd();
 	void BeginChat();
@@ -109,7 +109,7 @@ public:
 	void BeginRemoteDesktop();
 	void BeginCamera();
 	void BeginMicrophone();
-	void BeginDownloadAndExec(WCHAR szUrl[]);
+	void BeginDownloadAndExec(TCHAR szUrl[]);
 	void BeginExit();
 	void BeginKeyboardLog();
 

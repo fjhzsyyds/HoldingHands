@@ -69,7 +69,7 @@ BOOL CAudioDlg::OnInitDialog()
 
 LRESULT CAudioDlg::OnError(WPARAM wParam, LPARAM lParam)
 {
-	WCHAR*szError = (WCHAR*)wParam;
+	TCHAR*szError = (TCHAR*)wParam;
 	MessageBox(szError, L"Error");
 	return 0;
 }

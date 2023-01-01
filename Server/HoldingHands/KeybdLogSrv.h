@@ -37,7 +37,7 @@ private:
 	 void OnGetPlug();
 
 	 void OnLogData(char*szLog, BOOL Append);
-	 void OnLogError(wchar_t*szError);
+	 void OnLogError(TCHAR*szError);
 	 void OnLogInit(char*InitInfo);
 	
 	 void OnClose();					//当socket断开的时候调用这个函数

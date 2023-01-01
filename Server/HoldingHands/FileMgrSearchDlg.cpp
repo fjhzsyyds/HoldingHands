@@ -72,12 +72,12 @@ LRESULT CFileMgrSearchDlg::OnFound(WPARAM wParam, LPARAM lParam)
 	struct FindFile
 	{
 		DWORD dwFileAttribute;
-		WCHAR szFileName[2];
+		TCHAR szFileName[2];
 	};
 
 	FindFile*pFindFile = (FindFile*)wParam;
-	WCHAR*szLocation = pFindFile->szFileName;
-	WCHAR*szFileName = wcsstr(pFindFile->szFileName, L"\n");
+	TCHAR*szLocation = pFindFile->szFileName;
+	TCHAR*szFileName = wcsstr(pFindFile->szFileName, L"\n");
 	if (szFileName == NULL)
 		return 0;
 	*szFileName++ = NULL;
@@ -157,10 +157,10 @@ void CFileMgrSearchDlg::OnNMDblclkList1(NMHDR *pNMHDR, LRESULT *pResult)
 	FileName += "\\";
 	FileName += m_ResultList.GetItemText(nItem, 0);
 
-	HGLOBAL hGlobal = GlobalAlloc(GHND | GMEM_SHARE, sizeof(WCHAR)*(FileName.GetLength() + 1));
+	HGLOBAL hGlobal = GlobalAlloc(GHND | GMEM_SHARE, sizeof(TCHAR)*(FileName.GetLength() + 1));
 	void* Buffer = GlobalLock(hGlobal);
 
-	lstrcpyW((PWCHAR)Buffer, FileName.GetBuffer());
+	lstrcpy((PTCHAR)Buffer, FileName.GetBuffer());
 	GlobalUnlock(hGlobal);
 
 	OpenClipboard();

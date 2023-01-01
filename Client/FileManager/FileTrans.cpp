@@ -44,7 +44,7 @@ void CFileTrans::OnOpen()
 		if (NULL != (pSavePath = wcsstr(m_pInit->m_Buffer, L"\n"))){
 			*pSavePath = NULL;
 			//保存Dest路径.;
-			lstrcpyW(m_Path,m_pInit->m_Buffer);
+			lstrcpy(m_Path,m_pInit->m_Buffer);
 			//
 			SendMsg(MNFT_TRANS_INFO_GET, (char*)(pSavePath + 1), sizeof(TCHAR)*(lstrlenW(pSavePath + 1) + 1));//发送\n之后的数据.;
 		}
@@ -182,9 +182,9 @@ void CFileTrans::OnGetFileInfoRpl(DWORD Read, char*Buffer)
 	//
 	DWORD FullPathLen = lstrlenW(m_Path) + 1 + lstrlenW(pFileInfo->RelativeFilePath) + 1;
 	PTCHAR FullPath = (TCHAR*)malloc(FullPathLen*sizeof(TCHAR));
-	lstrcpyW(FullPath, m_Path);
-	lstrcatW(FullPath, L"\\");
-	lstrcatW(FullPath, pFileInfo->RelativeFilePath);
+	lstrcpy(FullPath, m_Path);
+	lstrcat(FullPath, L"\\");
+	lstrcat(FullPath, pFileInfo->RelativeFilePath);
 	//
 	if (!(pFileInfo->Attribute&FILE_ATTRIBUTE_DIRECTORY))
 	{
@@ -313,7 +313,7 @@ void CFileTrans::OnGetFileInfo(DWORD Read, char*Buffer)
 		pReply->fiFileInfo.dwFileLengthHi = m_JobList.GetHead()->dwFileLengthHi;
 		pReply->fiFileInfo.dwFileLengthLo = m_JobList.GetHead()->dwFileLengthLo;
 
-		lstrcpyW(pReply->fiFileInfo.RelativeFilePath, m_JobList.GetHead()->RelativeFilePath);
+		lstrcpy(pReply->fiFileInfo.RelativeFilePath, m_JobList.GetHead()->RelativeFilePath);
 		SendMsg(MNFT_FILE_INFO_RPL, (char*)pReply, dwRplLen);
 		free(pReply);
 		//正常情况下这里的代码是不会执行的.因为初始情况和每次结束发送后都会清除;
@@ -327,9 +327,9 @@ void CFileTrans::OnGetFileInfo(DWORD Read, char*Buffer)
 		{
 			DWORD dwFullPathLen = lstrlenW(m_Path) + 1 + lstrlenW(m_JobList.GetHead()->RelativeFilePath) + 1;
 			PTCHAR FullPath = (TCHAR*)malloc(dwFullPathLen*sizeof(TCHAR));
-			lstrcpyW(FullPath, m_Path);
-			lstrcatW(FullPath, L"\\");
-			lstrcatW(FullPath, m_JobList.GetHead()->RelativeFilePath);
+			lstrcpy(FullPath, m_Path);
+			lstrcat(FullPath, L"\\");
+			lstrcat(FullPath, m_JobList.GetHead()->RelativeFilePath);
 			//打开文件句柄;
 			m_hCurFile = CreateFile(FullPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 			//
@@ -352,7 +352,7 @@ void CFileTrans::OnGetTransInfo(DWORD Read, char*Buffer)
 	pFileList[0] = 0;
 	pFileList++;
 	//保存路径.之后传输文件用到.因为JobList里面保存的都是相对路径.;
-	lstrcpyW(m_Path,(TCHAR*)Buffer);
+	lstrcpy(m_Path,(TCHAR*)Buffer);
 	//
 	BFS_GetFileList((TCHAR*)Buffer, pFileList, &m_JobList);
 	//
@@ -403,9 +403,9 @@ void CFileTrans::BFS_GetFileList(TCHAR*Path, TCHAR*FileNameList, FileInfoList*pF
 		DWORD len = lstrlenW(Path) + 1 + lstrlenW(pNewFileInfo->RelativeFilePath) + 1;
 
 		TCHAR* FullPath = (TCHAR*)malloc(len*sizeof(TCHAR));
-		lstrcpyW(FullPath, Path);
-		lstrcatW(FullPath, L"\\");
-		lstrcatW(FullPath, pNewFileInfo->RelativeFilePath);
+		lstrcpy(FullPath, Path);
+		lstrcat(FullPath, L"\\");
+		lstrcat(FullPath, pNewFileInfo->RelativeFilePath);
 		WIN32_FIND_DATAW fd;
 		HANDLE hFirst = FindFirstFileW(FullPath, &fd);
 		if (hFirst != INVALID_HANDLE_VALUE)
@@ -436,10 +436,10 @@ void CFileTrans::BFS_GetFileList(TCHAR*Path, TCHAR*FileNameList, FileInfoList*pF
 		//It is a dir.browse it;
 		DWORD len = lstrlenW(Path) + 1 + lstrlenW(pFile->RelativeFilePath) + 2 + 1;
 		TCHAR* StartDir = (TCHAR*)malloc(len*sizeof(TCHAR));
-		lstrcpyW(StartDir, Path);
-		lstrcatW(StartDir, L"\\");
-		lstrcatW(StartDir, (pFile->RelativeFilePath));
-		lstrcatW(StartDir, L"\\*");
+		lstrcpy(StartDir, Path);
+		lstrcat(StartDir, L"\\");
+		lstrcat(StartDir, (pFile->RelativeFilePath));
+		lstrcat(StartDir, L"\\*");
 		//path\\filepath
 		WIN32_FIND_DATAW fd = { 0 };
 		HANDLE hFirst = FindFirstFileW(StartDir, &fd);
@@ -458,9 +458,9 @@ void CFileTrans::BFS_GetFileList(TCHAR*Path, TCHAR*FileNameList, FileInfoList*pF
 
 				FileInfo*pNewFileInfo = (FileInfo*)malloc(FileInfoLen);
 				//copy path
-				lstrcpyW(pNewFileInfo->RelativeFilePath, pFile->RelativeFilePath);
-				lstrcatW(pNewFileInfo->RelativeFilePath, L"\\");
-				lstrcatW(pNewFileInfo->RelativeFilePath, fd.cFileName);
+				lstrcpy(pNewFileInfo->RelativeFilePath, pFile->RelativeFilePath);
+				lstrcat(pNewFileInfo->RelativeFilePath, L"\\");
+				lstrcat(pNewFileInfo->RelativeFilePath, fd.cFileName);
 
 				pNewFileInfo->Attribute = fd.dwFileAttributes;
 				pNewFileInfo->dwFileLengthHi = (fd.nFileSizeHigh);

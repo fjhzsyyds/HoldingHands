@@ -12,7 +12,8 @@
 #define WM_FMDLG_PREV_UPLOAD_FROMURL	(WM_USER+137)
 #define WM_FMDLG_PREV_DOWNLOAD			(WM_USER+138)
 #define WM_FMDLG_PREV_RENAME			(WM_USER+139)
-#define WM_FMDLG_PREV_NEWFOLDER			(WM_USER+140)
+
+#define WM_FMDLG_NEWFOLDER_SUCCESS		(WM_USER+140)
 
 // CFileManagerDlg ¶Ô»°¿ò	
 class CFileManagerSrv;
@@ -21,25 +22,25 @@ class CFileManagerSrv;
 class CFileManagerDlg : public CDialogEx
 {
 	
-	typedef struct DriverInfo
+	typedef struct
 	{
-		WCHAR szName[128];
-		WCHAR szTypeName[128];
-		WCHAR szFileSystem[128];
+		TCHAR szName[128];
+		TCHAR szTypeName[128];
+		TCHAR szFileSystem[128];
 		ULARGE_INTEGER	Total;
 		ULARGE_INTEGER	Free;
 		DWORD dwType;
 	}DriverInfo;
 
 
-	typedef struct FMFileInfo
+	typedef struct
 	{
 		DWORD dwFileAttribute;
 		DWORD dwFileSizeLo;
 		DWORD dwFileSizeHi;
 		DWORD dwLastWriteLo;
 		DWORD dwLastWriteHi;
-		WCHAR szFileName[2];
+		TCHAR szFileName[2];
 	}FMFileInfo;
 
 
@@ -103,8 +104,8 @@ public:
 	afx_msg LRESULT OnPrevUploadFromUrl(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnPrevUploadFromDisk(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnPrevDownload(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT	OnPrevNewfolder(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT	OnPrevRename(WPARAM wParam, LPARAM lParam);
+
+	afx_msg LRESULT	OnNewfolderSuccess(WPARAM wParam, LPARAM lParam);
 
 	afx_msg void OnRunfileHide();
 	afx_msg void OnRunfileNormal();
@@ -115,4 +116,7 @@ public:
 	afx_msg void OnMenuCopy();
 	afx_msg void OnMenuCut();
 	afx_msg void OnMenuPaste();
+	afx_msg void OnLvnEndlabeleditList1(NMHDR *pNMHDR, LRESULT *pResult);
+
+	void AddItem(int idx, FMFileInfo * pis);
 };

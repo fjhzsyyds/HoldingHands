@@ -264,7 +264,7 @@ void CRemoteDesktop::OnGetSize()
 	//Á¢¿Ì¿ªÊ¼±àÂë
 	m_dwLastTime = GetTickCount();
 	if (!m_grab.GetFrame(&m_FrameBuffer, &m_dwFrameSize,m_dwCaptureFlags)){
-		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (wcslen(szError) + 1)));
+		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (lstrlen(szError) + 1)));
 		Close();
 	}
 
@@ -316,7 +316,7 @@ void CRemoteDesktop::OnNextFrame()
 	m_dwLastTime = GetTickCount();
 	if (!m_grab.GetFrame(&m_FrameBuffer, &m_dwFrameSize,m_dwCaptureFlags)){
 		printf("get frame failed!\n");
-		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (wcslen(szError) + 1)));
+		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (lstrlen(szError) + 1)));
 		Close();
 	}
 }
