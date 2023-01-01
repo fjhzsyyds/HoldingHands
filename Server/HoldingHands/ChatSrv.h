@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 
 
@@ -15,7 +15,7 @@
 class CChatDlg;
 
 class CChatSrv :
-	public CEventHandler
+	public CMsgHandler
 {
 public:
 	CChatDlg*	m_pDlg;
@@ -24,13 +24,11 @@ public:
 
 
 	void OnClose();					//当socket断开的时候调用这个函数
-	void OnConnect();				//当socket连接的时候调用这个函数
+	void OnOpen();				//当socket连接的时候调用这个函数
+
 	//有数据到达的时候调用这两个函数.
-	void OnReadPartial(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
-	//有数据发送完毕后调用这两个函数
-	void OnWritePartial(WORD Event, DWORD Total, DWORD nWrite, char*Buffer);
-	void OnWriteComplete(WORD Event, DWORD Total, DWORD nWrite, char*Buffer);
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer);
 
 
 
@@ -38,8 +36,8 @@ public:
 	void OnChatMsg(DWORD dwRead, char*szbuffer);
 
 
-	void SendMsg(WCHAR*szMsg);
-	CChatSrv(DWORD dwIdentity);
+	void SendMsgMsg(WCHAR*szMsg);
+	CChatSrv(CManager*pManager);
 	~CChatSrv();
 };
 

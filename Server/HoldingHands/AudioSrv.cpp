@@ -4,8 +4,8 @@
 #pragma comment(lib,"Winmm.lib")
 
 
-CAudioSrv::CAudioSrv(DWORD dwIdentity):
-CEventHandler(dwIdentity)
+CAudioSrv::CAudioSrv(CManager*pManager) :
+	CMsgHandler(pManager)
 {
 	//
 	m_Idx = 0;
@@ -28,17 +28,17 @@ CAudioSrv::~CAudioSrv()
 {
 }
 
-void CAudioSrv::OnConnect()
+void CAudioSrv::OnOpen()
 {
 	m_pDlg = new CAudioDlg(this);
 	if (FALSE == m_pDlg->Create(IDD_AUDIODLG,CWnd::GetDesktopWindow()))
 	{
-		Disconnect();
+		Close();
 		return;
 	}
 	m_pDlg->ShowWindow(SW_SHOW);
 	//¿ªÊ¼
-	Send(AUDIO_BEGIN, 0, 0);
+	SendMsg(AUDIO_BEGIN, 0, 0);
 }
 void CAudioSrv::OnClose()
 {
@@ -95,7 +95,7 @@ void CAudioSrv::OnAudioData(char*Buffer, DWORD dwLen)
 		{
 			WCHAR szError[] = L"AudioOutInit Failed!";
 			m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
-			Disconnect();
+			Close();
 			return;
 		}
 	}
@@ -133,12 +133,12 @@ void CAudioSrv::OnAudioData(char*Buffer, DWORD dwLen)
 	}
 	m_Idx = (m_Idx + 1) % BUFF_COUNT;
 }
-void CAudioSrv::OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Buffer)
+void CAudioSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
-	switch (Event)
+	switch (Msg)
 	{
 	case AUDIO_DATA:
-		OnAudioData(Buffer, dwRead);
+		OnAudioData(Buffer, dwSize);
 		break;
 	case AUDIO_ERROR:
 		OnAudioError((WCHAR*)Buffer);

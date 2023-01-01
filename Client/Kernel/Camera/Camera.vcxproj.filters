@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Common\EventHandler.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\Common\IOCPClient.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -34,6 +31,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="MySampleGrabberCB.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\MsgHandler.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\Manager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

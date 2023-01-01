@@ -42,4 +42,5 @@ public:
 	afx_msg void OnEnChangeEdit2();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg void OnBnClickedCheck1();
+	afx_msg void OnBnClickedButton1();
 };

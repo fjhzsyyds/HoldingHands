@@ -7,15 +7,17 @@ class CPacket;
 
 #define REMOTE_AND_LOCAL_ADDR_LEN		(2 * (sizeof(sockaddr)+16))
 
-class CEventHandler;
+class CMsgHandler;
 class CClientContext
 {
 private:
 	friend class CManager;
 	friend class CIOCPServer;
-	friend	class  CEventHandler;
+	friend	class  CMsgHandler;
 	//
 	CIOCPServer*	m_pServer;
+
+	CManager *		m_pManager;
 	//
 	char		m_szPeerAddr[64];
 	char		m_szSockAddr[64];
@@ -24,7 +26,6 @@ private:
 	//
 	//Handler
 	DWORD			m_Identity;								//功能
-	CEventHandler*	m_pHandler;								//处理函数
 	//
 	SOCKET			m_ClientSocket;	
 	//与接受有关的buffer
@@ -42,17 +43,25 @@ private:
 	HANDLE			 m_SendPacketOver;						//是否发送完毕
 	//
 public:
-	BOOL BindHandler(CEventHandler*pHandler);
-	BOOL UnbindHandler();
 	//发送一个包,失败返回-1,成功返回0
-	int SendPacket(DWORD command, char*data, int len);
+	int SendPacket(DWORD command,const char*data, int len,DWORD dwFlag);
 	//断开连接
 	void Disconnect();
 
+
+	//ReadIO请求完成
+	void OnReadComplete(DWORD nTransferredBytes, DWORD dwFailedReason);
+	//Write IO请求完成
+	void OnWriteComplete(DWORD nTransferredBytes, DWORD dwFailedReason);
+	//断开连接
+	void OnClose();
+	void OnConnect();
+
+	//
 	void GetPeerName(char* Addr, USHORT&Port);
 	void GetSockName(char* Addr, USHORT&Port);
 
-	CClientContext(SOCKET ClientSocket,CIOCPServer *pServer);
+	CClientContext(SOCKET ClientSocket,CIOCPServer *pServer,CManager*pManager);
 	~CClientContext();
 };
 

@@ -1,12 +1,27 @@
-#include "Cmd.h"
 #include "IOCPClient.h"
+#include "Manager.h"
+#include "Cmd.h"
 
-extern "C" __declspec(dllexport) void  ModuleEntry(char* szServerAddr, unsigned short uPort, DWORD dwParam){
-	CCmd cmd;
-	CIOCPClient io(szServerAddr,uPort);
+extern "C" __declspec(dllexport) void  ModuleEntry(char* szServerAddr,
+	unsigned short uPort, DWORD dwParam = 0){
 
-	io.BindHandler(&cmd);
-	io.Run();
-	io.UnbindHandler();
+	CManager *pManager = new CManager();
 
+	CIOCPClient *pClient = new CIOCPClient(pManager,
+		szServerAddr, uPort);
+
+	CMsgHandler *pHandler = new CCmd(pManager);
+
+	pManager->Associate(pClient, pHandler);
+	pClient->Run();
+
+	delete pHandler;
+	delete pClient;
+	delete pManager;
+}
+
+int main(){
+	CIOCPClient::SocketInit();
+	ModuleEntry("127.0.0.1", 10086);
+	CIOCPClient::SocketTerm();
 }

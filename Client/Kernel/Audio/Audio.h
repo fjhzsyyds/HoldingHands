@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 #include "AudioGrab.h"
 #define AUDIO		('A'|'U'<<8|'D'<<16|'O'<<24)
 
@@ -12,7 +12,7 @@
 
 
 class CAudio :
-	public CEventHandler
+	public CMsgHandler
 {
 	CAudioGrab m_AudioGrab;
 
@@ -25,12 +25,14 @@ class CAudio :
 	//void OnAudioData();
 	static void __stdcall WorkThread(CAudio*pThis);
 public:
-	CAudio();
+	CAudio(CManager*pManager);
 
-	void OnConnect();
 	void OnClose();
+	void OnOpen();
 
-	void OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Buffer);
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer){}
+
 	~CAudio();
 };
 

@@ -8,7 +8,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////
 //1.对于任意一个socket,Read(或者Write)操作同时只能有一个线程去处理.
 //2.每一个完成的IO操作(自定义协议层)，后通知主窗口去处理消息
-//3.Send的话只是把数据加到SendList里面,然后判断是否去Post一个completionstatu
+//3.SendMsg的话只是把数据加到SendMsgList里面,然后判断是否去Post一个completionstatu
 //4.每一个客户端，检测远端是否断开，主动关闭，发送数据
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -16,6 +16,8 @@
 #define PACKET_CHECK					0x534E4942
 #define REMOTE_AND_LOCAL_ADDR_LEN		(2 * (sizeof(sockaddr)+16))
 #define IDENTITY_LEN					4
+
+#define HEART_BEAT		0x00abcdef
 
 class CPacket;
 struct CPacketHeader;
@@ -49,7 +51,7 @@ struct OVERLAPPEDPLUS
 	}
 };
 
-#define HEART_BEAT		0x00abcdef
+
 
 //CIOCP只应该有一个实例
 class CIOCPServer
@@ -58,12 +60,11 @@ public:
 	static LPFN_ACCEPTEX	lpfnAcceptEx;
 private:
 	//log
-	std::ofstream			m_Log;
-
 	//上传下载速率实现.
 	volatile DWORD			m_ReadSpeed;
 	volatile DWORD			m_WriteSpeed;
 	volatile unsigned int	m_SpeedLock;
+	
 	//Listen Socket
 	SOCKET			m_ListenSocket;
 	//AcceptSocket=================================================================
@@ -78,7 +79,6 @@ private:
 	CPtrList*		m_pFreeContextList;
 	CPtrList*		m_pClientContextList;						//保存clients
 	CRITICAL_SECTION m_csContext;
-
 	//==============================================================================
 	//IOCP
 	DWORD					m_BusyCount;							//已经获取IO事件的线程数
@@ -107,12 +107,11 @@ private:
 	void OnAcceptComplete(DWORD dwFailedReason);
 	//处理已经完成的IO消息
 	void HandlerIOMsg(CClientContext*pClientContext, DWORD nTransferredBytes, DWORD IoType, DWORD dwFailedReason);
-	//ReadIO请求完成
-	void OnReadComplete(CClientContext*pClientContext, DWORD nTransferredBytes, DWORD dwFailedReason);
-	//Write IO请求完成
-	void OnWriteComplete(CClientContext*pClientContext, DWORD nTransferredBytes, DWORD dwFailedReason);
-	//断开连接
-	void OnClose(CClientContext*pClientContext);
+	
+
+
+
+
 	//投递一个Accept请求
 	void PostAccept();
 	//投递一个ReadIO请求
@@ -151,10 +150,13 @@ public:
 	//关闭服务器
 	void StopServer();
 	//由于StartSvr 和 StopSvr需要一些时间,增加异步操作
-	void AsyncStartSvr(USHORT Prot);
+	void AsyncStartSrv(USHORT Prot);
 	//
-	void AsyncStopSvr();
+	void AsyncStopSrv();
 	//-------------------------------------------------------------------------------
+	CManager * GetMsgManager(){
+		return m_pManager;
+	}
 
 	static CIOCPServer* CreateServer(HWND hNotifyWnd);
 	static void DeleteServer();

@@ -7,6 +7,7 @@
 #include "afxdialogex.h"
 #include "resource.h"
 #include "MiniFileTransSrv.h"
+#include "utils.h"
 // CMiniFileTransDlg 对话框
 
 IMPLEMENT_DYNAMIC(CMiniFileTransDlg, CDialogEx)
@@ -23,10 +24,8 @@ CMiniFileTransDlg::CMiniFileTransDlg(CMiniFileTransSrv*pHandler, CWnd* pParent /
 	m_dwFinishedCount = 0;
 	m_dwFailedCount = 0;
 
-	char szIP[128] = { 0 };
-	USHORT uPort;
-	m_pHandler->GetPeerName(szIP, uPort);
-	m_IP = CA2W(szIP);
+	auto const peer = m_pHandler->GetPeerName();
+	m_IP = CA2W(peer.first.c_str());
 }
 
 CMiniFileTransDlg::~CMiniFileTransDlg()
@@ -66,7 +65,7 @@ void CMiniFileTransDlg::OnClose()
 	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	if (m_pHandler != NULL){
 		//断开连接
-		m_pHandler->Disconnect();
+		m_pHandler->Close();
 		m_pHandler = NULL;
 	}
 }
@@ -94,12 +93,12 @@ LRESULT CMiniFileTransDlg::OnTransInfo(WPARAM wParam, LPARAM lParam)
 	//
 	CString Text;
 	if (lParam == MNFT_DUTY_RECEIVER)
-		Text.Format(L"[%s] Downloading...", m_IP.GetBuffer());
+		Text.Format(TEXT("[%s] Downloading..."), m_IP.GetBuffer());
 	else
-		Text.Format(L"[%s] Uploading...", m_IP.GetBuffer());
+		Text.Format(TEXT("[%s] Uploading..."), m_IP.GetBuffer());
 	SetWindowText(Text);
 
-	Text.Format(L"%d / %d", m_dwFinishedCount, m_dwTotalCount);
+	Text.Format(TEXT("%d / %d"), m_dwFinishedCount, m_dwTotalCount);
 	GetDlgItem(IDC_COUNT_PROGRESS)->SetWindowTextW(Text);
 	return 0;
 }
@@ -107,7 +106,7 @@ LRESULT CMiniFileTransDlg::OnTransFileBegin(WPARAM wParam, LPARAM lParam)
 {
 	CMiniFileTransSrv::FileInfo*pFile = (CMiniFileTransSrv::FileInfo*)wParam;
 	CString Text;
-	Text.Format(L"Processing:%s", pFile->RelativeFilePath);
+	Text.Format(TEXT("Processing:%s"), pFile->RelativeFilePath);
 	m_TransLog.SetSel(-1);
 	m_TransLog.ReplaceSel(Text);
 
@@ -120,53 +119,31 @@ LRESULT CMiniFileTransDlg::OnTransFileFinished(WPARAM wParam, LPARAM lParam)
 	m_TransLog.SetSel(-1);
 	CString Text = L"   -OK\r\n";
 
-	if (wParam != MNFT_STATU_SUCCESS)
-	{
+	if (wParam != MNFT_STATU_SUCCESS){
 		m_dwFailedCount++;
 		Text = L"   -Failed\r\n";
 	}
 	//记录结果.
 	m_TransLog.ReplaceSel(Text);
 	m_dwFinishedCount++;
-	Text.Format(L"%d / %d", m_dwFinishedCount, m_dwTotalCount);
+	Text.Format(TEXT("%d / %d"), m_dwFinishedCount, m_dwTotalCount);
 	GetDlgItem(IDC_COUNT_PROGRESS)->SetWindowTextW(Text);
 	return 0;
 }
 
 LRESULT CMiniFileTransDlg::OnTransFileDC(WPARAM wParam, LPARAM lParam)
 {
-	WCHAR* MemUnits[] =
-	{
-		L"Byte",
-		L"KB",
-		L"MB",
-		L"GB",
-		L"TB"
-	};
-
 	m_ullFinishedSize += wParam;
-	ULONGLONG ullFinished = m_ullFinishedSize,ullTotal = m_ullTotalSize;
-	int MemUnitIdx1 = 0, MemUnitIdx2 = 0;
-	int MaxIdx = (sizeof(MemUnits) / sizeof(MemUnits[0])) - 1;
-	//Get FinishedSize Unit.
-	while (ullFinished > 1024 && MemUnitIdx1 < MaxIdx)
-	{
-		MemUnitIdx1++;
-		ullFinished >>= 10;
-	}
-	DWORD dwFinished = (ullFinished & 0xffffffff);
-	++dwFinished;
-	//Get TotalSize Unit
-	while (ullTotal > 1024 && MemUnitIdx2 < MaxIdx)
-	{
-		MemUnitIdx2++;
-		ullTotal >>= 10;
-	}
-	DWORD dwTotal = (ullTotal & 0xffffffff);
-	++dwTotal;
+
+	LARGE_INTEGER liFinished, liTotal;
+	TCHAR strFinished[128], strTotal[128];
+	liFinished.QuadPart = m_ullFinishedSize, liTotal.QuadPart = m_ullTotalSize;
+	GetStorageSizeString(liFinished, strFinished);
+	GetStorageSizeString(liTotal, strTotal);
+
 	//SetText
 	CString Text;
-	Text.Format(L"%d %s/%d %s", dwFinished, MemUnits[MemUnitIdx1], dwTotal, MemUnits[MemUnitIdx2]);
+	Text.Format(TEXT("%s/%s"), strFinished, strTotal);
 	GetDlgItem(IDC_SZIE_PROGRESS)->SetWindowTextW(Text);
 	//SetProgressorPos;
 	m_Progress.SetPos(m_ullFinishedSize * 100 / m_ullTotalSize);
@@ -176,9 +153,10 @@ LRESULT CMiniFileTransDlg::OnTransFileDC(WPARAM wParam, LPARAM lParam)
 LRESULT CMiniFileTransDlg::OnTransFinished(WPARAM wParam, LPARAM lParam)
 {
 	CString Text;
-	Text.Format(L"[%s] Transfer Complete!", m_IP.GetBuffer());
+	Text.Format(TEXT("[%s] Transfer Complete!"), m_IP.GetBuffer());
 	SetWindowText(Text);
-	Text.Format(L"Totoal File Count:%d \r\nSuccess:%d \r\nFailed:%d \r\n", m_dwTotalCount, m_dwFinishedCount - m_dwFailedCount, m_dwFailedCount);
-	MessageBox(Text,L"Transfer Complete!");
+	Text.Format(TEXT("Totoal File Count:%d \r\nSuccess:%d \r\nFailed:%d \r\n"), 
+		m_dwTotalCount, m_dwFinishedCount - m_dwFailedCount, m_dwFailedCount);
+	MessageBox(Text,TEXT("Transfer Complete!"));
 	return 0;
 }

@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 #define CMD				('C'|('M')<<8|('D')<<16)
 
 //0成功,-1失败
@@ -10,25 +10,22 @@
 
 class CCmdWnd;
 class CCmdSrv :
-	public CEventHandler
+	public CMsgHandler
 {
 private:
 	CCmdWnd *	m_pWnd;
 
 public:
 	void OnClose();					//当socket断开的时候调用这个函数
-	void OnConnect();				//当socket连接的时候调用这个函数
-	//有数据到达的时候调用这两个函数.
-	void OnReadPartial(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
-	//有数据发送完毕后调用这两个函数
-	void OnWritePartial(WORD Event, DWORD Total, DWORD nWrite, char*Buffer);
-	void OnWriteComplete(WORD Event, DWORD Total, DWORD nWrite, char*Buffer);
-	//
+	void OnOpen();				//当socket连接的时候调用这个函数
+
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer);
+
 
 	void OnCmdBegin(DWORD dwStatu);
 	void OnCmdResult(char*szBuffer);
-	CCmdSrv(DWORD dwIdentity);
+	CCmdSrv(CManager*pManager);
 	~CCmdSrv();
 };
 

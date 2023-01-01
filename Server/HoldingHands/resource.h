@@ -64,6 +64,14 @@
 #define IDC_CHECK2                      1015
 #define IDC_CHECK3                      1016
 #define IDC_BUTTON3                     1016
+#define IDC_COMBO3                      1017
+#define IDC_VIDEO                       1018
+#define IDC_OPERATION                   1019
+#define IDC_COMBO4                      1020
+#define IDC_URL                         1022
+#define IDC_FILE_NAME                   1023
+#define IDC_FILE_NAME2                  1024
+#define IDC_PROGRESS                    1024
 #define ID_MAIN                         32771
 #define ID_MAIN_STARTSERVER             32772
 #define ID_MAIN_SETTINGS                32773
@@ -138,14 +146,18 @@
 #define ID_CAPTURE_START                32843
 #define ID_DISPLAY_FULLSCREEN32844      32844
 #define ID_DISPLAY_FULLSCREEN32845      32845
+#define ID_OPERATION_UTILS              32846
+#define ID_UTILS_COPYTOSTARTUP          32847
+#define ID_UTILS_ADDTO                  32848
+#define ID_UTILS_DOWNLOADANDEXEC        32849
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        347
-#define _APS_NEXT_COMMAND_VALUE         32846
-#define _APS_NEXT_CONTROL_VALUE         1017
+#define _APS_NEXT_RESOURCE_VALUE        348
+#define _APS_NEXT_COMMAND_VALUE         32850
+#define _APS_NEXT_CONTROL_VALUE         1023
 #define _APS_NEXT_SYMED_VALUE           310
 #endif
 #endif

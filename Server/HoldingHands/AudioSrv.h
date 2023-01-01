@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 #include<mmreg.h>
 #include<mmsystem.h>
@@ -17,7 +17,7 @@
 
 class CAudioDlg;
 class CAudioSrv :
-	public CEventHandler
+	public CMsgHandler
 {
 private:
 	WAVEHDR	 m_hdrs[BUFF_COUNT];
@@ -30,13 +30,16 @@ private:
 	BOOL AudioOutInit();
 	void AudioOutTerm();
 public:
-	void OnConnect();
+	void OnOpen();
 	void OnClose();
 	void OnAudioData(char*Buffer,DWORD dwLen);
 
 	void OnAudioError(WCHAR*szError);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Buffer);
-	CAudioSrv(DWORD dwIdentity);
+
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer) { }; 
+
+	CAudioSrv(CManager*pManager);
 	~CAudioSrv();
 };
 

@@ -29,14 +29,14 @@ extern "C"
 #define REMOTEDESKTOP_FLAG_CAPTURE_MOUSE		(0x1)
 #define REMOTEDESKTOP_FLAG_CAPTURE_TRANSPARENT	(0x2)
 
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 class CRemoteDesktopWnd;
 
 
 
 class CRemoteDesktopSrv :
-	public CEventHandler
+	public CMsgHandler
 {
 public:
 	struct CtrlParam
@@ -60,6 +60,8 @@ private:
 	HDC					m_hMemDC;
 	void*				m_Buffer;
 
+	HANDLE				m_hFree;
+
 	CRemoteDesktopWnd*	m_pWnd;
 
 	BOOL RemoteDesktopSrvInit(DWORD dwWidth,DWORD dwHeight);
@@ -73,7 +75,8 @@ private:
 	void OnSetClipboardText(char*Text);
 public:
 	
-	//
+	char* GetBmpData(DWORD * lpWidth, DWORD* lpHeight,DWORD * lpDataSize);
+
 	void NextFrame();
 	void Control(CtrlParam*pParam);
 	void SetClipboardText(char*szText);
@@ -81,14 +84,13 @@ public:
 	void SetCaptureFlag(DWORD dwFlag);
 
 	void OnClose();					//当socket断开的时候调用这个函数
-	void OnConnect();				//当socket连接的时候调用这个函数
-	//有数据到达的时候调用这两个函数.
-	void OnReadPartial(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
-	//有数据发送完毕后调用这两个函数
-	void OnWritePartial(WORD Event, DWORD Total, DWORD nWrite, char*Buffer);
-	void OnWriteComplete(WORD Event, DWORD Total, DWORD nWrite, char*Buffer);
-	CRemoteDesktopSrv(DWORD dwIdentidy);
+	void OnOpen();				//当socket连接的时候调用这个函数
+
+
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer);
+
+	CRemoteDesktopSrv(CManager*pManager);
 	~CRemoteDesktopSrv();
 };
 

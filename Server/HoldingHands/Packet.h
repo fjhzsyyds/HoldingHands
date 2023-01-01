@@ -13,8 +13,7 @@
 #define GetCommandEvent(cmd)				(cmd&0x0000FFFF)
 
 /*
-struct CPacketHeader
-{
+struct CPacketHeader{
 	DWORD			m_dwCheck;						//数据校验
 	DWORD			m_dwBufferLen;					//Buffer长度
 	DWORD			m_dwCommand;					//远程命令
@@ -25,53 +24,48 @@ struct CPacketHeader
 
 #define KEY	"HoldingHandsYYDS"
 
+//数据包....
 class CPacket
 {
-
 private:
 	char* m_pBuffer;					//用来储存Header + Body
 	DWORD m_dwBufferLen;				//缓冲区长度
 public:
-	
 	BOOL			AllocateMem(DWORD BodyLen);		
-	
 	//校验数据
-	inline BOOL		Verify()
-	{
+	inline BOOL		Verify(){
 		return ((DWORD*)m_pBuffer)[0] == PACKET_CHECK;
 	}
 	//
-	inline char*	GetBody()
-	{
+	inline char*	GetBody(){
 		return m_pBuffer + PACKET_HEADER_LEN;
 	}
 
-	inline char*	GetBuffer()
-	{
+	inline char*	GetBuffer(){
 		return m_pBuffer;
 	}
-	inline DWORD	GetBodyLen()
-	{
+	inline DWORD	GetBodyLen(){
 		return ((DWORD*)m_pBuffer)[1];
 	}
 
-	inline DWORD	GetCommand()
-	{
+	inline DWORD	GetCommand(){
 		return ((DWORD*)m_pBuffer)[2];
 	}
-	inline BOOL		SetHeader(DWORD BodyLen, DWORD Command)
-	{
-		if (m_pBuffer == NULL || m_dwBufferLen<PACKET_HEADER_LEN)
-		{
+	inline DWORD GetFlag(){
+		return ((DWORD*)m_pBuffer)[3];
+	}
+
+	inline BOOL		SetHeader(DWORD BodyLen, DWORD Command,DWORD dwFlag){
+		if (m_pBuffer == NULL || m_dwBufferLen<PACKET_HEADER_LEN){
 			return FALSE;
 		}
 		((DWORD*)m_pBuffer)[0] = PACKET_CHECK;
 		((DWORD*)m_pBuffer)[1] = BodyLen;
 		((DWORD*)m_pBuffer)[2] = Command;
+		((DWORD*)m_pBuffer)[3] = dwFlag;
+
 		return TRUE;
 	}
-
-	void Encrypt(DWORD dwOffset, DWORD dwLen);
 
 	CPacket();
 	~CPacket();

@@ -2,13 +2,13 @@
 #ifndef _MINI_FILE_TRANS_SVR
 #define _MINI_FILE_TRANS_SVR
 
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 #define MINIFILETRANS	('M'|('N'<<8)|('F')<<16|('T')<<24)
 
 
-#define MNFT_DUTY_SENDER			(0xabcdef11)
-#define MNFT_DUTY_RECEIVER			(~MNFT_DUTY_SENDER)
+#define MNFT_DUTY_SendMsgER			(0xabcdef11)
+#define MNFT_DUTY_RECEIVER			(~MNFT_DUTY_SendMsgER)
 
 #define MNFT_INIT					(0xab00)
 
@@ -21,10 +21,10 @@
 #define MNFT_FILE_DATA_CHUNK_GET	(0xab05)
 #define MNFT_FILE_DATA_CHUNK_RPL	(0xab06)
 
-//recv----->send
+//recv----->SendMsg
 #define MNFT_FILE_TRANS_FINISHED	(0xab07)
 
-//send ---> recv
+//SendMsg ---> recv
 #define MNFT_TRANS_FINISHED			(0xab08)
 
 
@@ -35,7 +35,7 @@
 class CMiniFileTransDlg;
 
 class CMiniFileTransSrv :
-	public CEventHandler
+	public CMsgHandler
 {
 public:
 	/************************************************************************************/
@@ -202,7 +202,7 @@ private:
 	//recv use
 	ULONGLONG		m_ullLeftFileLength;
 	DWORD			m_dwCurFileAttribute;
-	//send use
+	//SendMsg use
 	FileInfoList	m_JobList;
 
 	//common
@@ -212,13 +212,10 @@ private:
 	CMiniFileTransDlg*m_pDlg;
 
 	void OnClose();	
-	void OnConnect();
+	void OnOpen();
 
-	void OnWritePartial(WORD Event, DWORD Total, DWORD dwRead, char*buffer);
-	void OnWriteComplete(WORD Event, DWORD Total, DWORD dwRead, char*buffer);
-
-	void OnReadPartial(WORD Event, DWORD Total, DWORD dwRead, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Buffer);
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer);
 
 	void Clean();
 	//
@@ -242,7 +239,7 @@ private:
 	void OnGetFileDataChunkRpl(DWORD Read, char*Buffer);
 
 public:
-	CMiniFileTransSrv(DWORD Identity);
+	CMiniFileTransSrv(CManager*pManager);
 	~CMiniFileTransSrv();
 };
 

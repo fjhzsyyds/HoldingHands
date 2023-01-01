@@ -4,6 +4,7 @@
 
 #pragma once
 #include "ClientList.h"
+#include "Config.h"
 
 #define VIEW_SHOW_CLIENLIST	1
 #define VIEW_SHOE_LOG		2
@@ -56,7 +57,8 @@ private:  // 控件条嵌入成员
 	BOOL			  m_bExitAfterStop;
 	//服务器
 	CIOCPServer*	  m_pServer;
-
+	//
+	CConfig			  m_config;
 	//
 	unsigned int	  m_listenPort;
 // 生成的消息映射函数
@@ -67,8 +69,8 @@ protected:
 
 	//void Log(CString text);
 public:
-	void SetListenPort(unsigned int Port){
-		m_listenPort = Port;
+	CConfig& getConfig(){
+		return m_config;
 	}
 	afx_msg void OnPaint();
 
@@ -102,10 +104,14 @@ public:
 	afx_msg void OnOperationCamera();
 	afx_msg void OnSessionRestart();
 	afx_msg void OnOperationMicrophone();
-	afx_msg void OnOperationDownloadandexec();
+
+
 	afx_msg void OnMainBuild();
 	afx_msg void OnMainSettings();
 	afx_msg void OnOperationKeyboard();
+	afx_msg void OnUtilsAddto();
+	afx_msg void OnUtilsCopytostartup();
+	afx_msg void OnUtilsDownloadandexec();
 };
 
 

@@ -2,8 +2,8 @@
 #include "CmdSrv.h"
 #include "CmdWnd.h"
 #include "resource.h"
-CCmdSrv::CCmdSrv(DWORD dwIdentity) :
-CEventHandler(dwIdentity)
+CCmdSrv::CCmdSrv(CManager*pManager):
+	CMsgHandler(pManager)
 {
 	m_pWnd = NULL;
 }
@@ -22,12 +22,11 @@ void CCmdSrv::OnClose()
 		m_pWnd = NULL;
 	}
 }
-void CCmdSrv::OnConnect()
-{
+void CCmdSrv::OnOpen(){
 	m_pWnd = new CCmdWnd(this);
 
 	if (FALSE == m_pWnd->Create(NULL, L"Cmd", WS_OVERLAPPEDWINDOW)){
-		Disconnect();
+		Close();
 		return;
 	}
 	RECT rect;
@@ -39,23 +38,15 @@ void CCmdSrv::OnConnect()
 	m_pWnd->ShowWindow(SW_SHOW);
 	m_pWnd->UpdateWindow();
 }
-void CCmdSrv::OnReadPartial(WORD Event, DWORD Total, DWORD nRead, char*Buffer)
-{
 
-}
-//有数据发送完毕后调用这两个函数
-void CCmdSrv::OnWritePartial(WORD Event, DWORD Total, DWORD nWrite, char*Buffer)
-{
-
-}
-void CCmdSrv::OnWriteComplete(WORD Event, DWORD Total, DWORD nWrite, char*Buffer)
+void CCmdSrv::OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
 
 }
 
-void CCmdSrv::OnReadComplete(WORD Event, DWORD Total, DWORD nRead, char*Buffer)
+void CCmdSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
-	switch (Event)
+	switch (Msg)
 	{
 	case CMD_BEGIN:
 		OnCmdBegin(*((DWORD*)Buffer));

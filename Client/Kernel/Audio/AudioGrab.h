@@ -1,30 +1,29 @@
 #pragma once
-#include "EventHandler.h"
+#include <Windows.h>
 #include<mmreg.h>
+#include <list>
+
+using std::list;
+using std::pair;
+
 
 #define BUFF_COUNT 16
 #define LEN_PER_BUFF 0x2000
 
 class CAudioGrab
 {
-	struct AudioBuffList
-	{
-		char*	m_Buffer;
-		DWORD	m_dwBuffLen;
-		struct AudioBuffList*next;
-	};
 
 private:
-	AudioBuffList*m_pListHead;
-	AudioBuffList*m_pListTail;
 	DWORD		  m_dwBufSize;
+	
+	list<pair<char*, DWORD>> m_buffer_list;
+	
 	HANDLE		  m_hEvent;
 	HANDLE		  m_hMutex;
 
 	HWAVEIN		  m_hWaveIn;		//输入设备
 
 	volatile long m_bStop;
-
 
 	WAVEFORMATEX	 m_Wavefmt;	//格式
 	

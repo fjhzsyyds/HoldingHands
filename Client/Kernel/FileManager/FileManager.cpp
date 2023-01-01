@@ -1,29 +1,21 @@
 #include "FileManager.h"
-
 #include "FileDownloader.h"
 #include "FileMgrSearch.h"
 #include "FileTrans.h"
-
 #include "IOCPClient.h"
-
 #include <process.h>
 
-CFileManager::CFileManager(CModuleMgr*pModuleMgr) :
-CEventHandler(FILE_MANAGER)
+#include "Manager.h"
+
+CFileManager::CFileManager(CManager*pManager) :
+CMsgHandler(pManager, FILE_MANAGER)
 {
 	//init buffer.
-	m_pCurDir = (wchar_t*)malloc(0x10000 * sizeof(wchar_t));
-	memset(m_pCurDir, 0, 0x10000 * sizeof(wchar_t));
-
-	m_SrcPath = (wchar_t*)malloc(0x10000 * sizeof(wchar_t));
-	memset(m_pCurDir, 0, 0x10000 * sizeof(wchar_t));
-
-	m_FileList = (wchar_t*)malloc(0x10000 * sizeof(wchar_t));
-	memset(m_pCurDir, 0, 0x10000 * sizeof(wchar_t));
+	m_pCurDir = (TCHAR*)calloc(0x10000, sizeof(TCHAR));
+	m_SrcPath = (TCHAR*)calloc(0x10000, sizeof(TCHAR));
+	m_FileList = (TCHAR*)calloc(0x10000, sizeof(TCHAR));
 
 	m_bMove = FALSE;
-	//
-	m_pModuleMgr = pModuleMgr;
 }
 
 
@@ -45,33 +37,56 @@ CFileManager::~CFileManager()
 
 static void BeginFileTrans(char* szServerAddr, unsigned short uPort, LPVOID lpParam)
 {
-	// thread procedure.
-	CIOCPClient Client(szServerAddr, uPort);
-	CFileTrans FileTrans((CFileTrans::CMiniFileTransInit*)lpParam, MINIFILETRANS);
+	CManager *pManager = new CManager();
 
-	Client.BindHandler(&FileTrans);
-	Client.Run();
-	Client.UnbindHandler();
+	CIOCPClient *pClient = new CIOCPClient(pManager,
+		szServerAddr, uPort);
+
+	CMsgHandler *pHandler = new CFileTrans(pManager, (CFileTrans::CMiniFileTransInit*)lpParam);
+
+	pManager->Associate(pClient, pHandler);
+	pClient->Run();
+
+	delete pHandler;
+	delete pClient;
+	delete pManager;
+
 }
 
 static  void BeginDownload(char* szServerAddr, unsigned short uPort, LPVOID lpParam)
 {
-	CIOCPClient Client(szServerAddr, uPort);
-	CFileDownloader Dwonload((CFileDownloader::InitParam*)lpParam);
 
-	Client.BindHandler(&Dwonload);
-	Client.Run();
-	Client.UnbindHandler();
+	CManager *pManager = new CManager();
+
+	CIOCPClient *pClient = new CIOCPClient(pManager,
+		szServerAddr, uPort);
+
+	CMsgHandler *pHandler = new CFileDownloader(pManager, (CFileDownloader::InitParam*)lpParam);
+
+	pManager->Associate(pClient, pHandler);
+	pClient->Run();
+
+	delete pHandler;
+	delete pClient;
+	delete pManager;
 }
 
 static void BeginSearch(char* szServerAddr, unsigned short uPort, LPVOID lpParam)
 {
-	CIOCPClient Client(szServerAddr, uPort);
-	CFileMgrSearch MgrSearch;
 
-	Client.BindHandler(&MgrSearch);
-	Client.Run();
-	Client.UnbindHandler();
+	CManager *pManager = new CManager();
+
+	CIOCPClient *pClient = new CIOCPClient(pManager,
+		szServerAddr, uPort);
+
+	CMsgHandler *pHandler = new CFileMgrSearch(pManager);
+
+	pManager->Associate(pClient, pHandler);
+	pClient->Run();
+
+	delete pHandler;
+	delete pClient;
+	delete pManager;
 }
 
 typedef void(*ModuleEntry)(char* szServerAddr, unsigned short uPort, LPVOID dwParam);
@@ -102,18 +117,14 @@ void CFileManager::OnClose()
 {
 
 }
-void CFileManager::OnConnect()
+void CFileManager::OnOpen()
 {
 
 }
 
-void CFileManager::OnReadPartial(WORD Event, DWORD Total, DWORD dwRead, char*Buffer)
+void CFileManager::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
-
-}
-void CFileManager::OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Buffer)
-{
-	switch (Event)
+	switch (Msg)
 	{
 	case FILE_MGR_CHDIR:
 		OnChangeDir(Buffer);
@@ -138,7 +149,7 @@ void CFileManager::OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Bu
 		break;
 	case FILE_MGR_RUNFILE_HIDE:
 	case FILE_MGR_RUNFILE_NORMAL:
-		OnRunFile(Event,Buffer);
+		OnRunFile(Msg, Buffer);
 		break;
 	case FILE_MGR_REFRESH:
 		OnRefresh();
@@ -163,19 +174,19 @@ void CFileManager::OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Bu
 		break;
 	//echo
 	case FILE_MGR_PREV_DOWNLOAD:
-		Send(FILE_MGR_PREV_DOWNLOAD, 0, 0);
+		SendMsg(FILE_MGR_PREV_DOWNLOAD, 0, 0);
 		break;
 	case FILE_MGR_PREV_UPLOADFROMDISK:
-		Send(FILE_MGR_PREV_UPLOADFROMDISK, 0, 0);
+		SendMsg(FILE_MGR_PREV_UPLOADFROMDISK, 0, 0);
 		break;
 	case FILE_MGR_PREV_UPLOADFRURL:
-		Send(FILE_MGR_PREV_UPLOADFRURL, 0, 0);
+		SendMsg(FILE_MGR_PREV_UPLOADFRURL, 0, 0);
 		break;
 	case FILE_MGR_PREV_NEWFOLDER:
-		Send(FILE_MGR_PREV_NEWFOLDER, 0, 0);
+		SendMsg(FILE_MGR_PREV_NEWFOLDER, 0, 0);
 		break;
 	case FILE_MGR_PREV_RENAME:
-		Send(FILE_MGR_PREV_RENAME, 0, 0);
+		SendMsg(FILE_MGR_PREV_RENAME, 0, 0);
 		break;
 	}
 }
@@ -184,15 +195,13 @@ void CFileManager::OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Bu
 
 void CFileManager::OnUp()
 {
-	WCHAR*pNewDir = (WCHAR*)malloc(sizeof(WCHAR) *(lstrlenW(m_pCurDir) + 1));
+	TCHAR*pNewDir = (TCHAR*)malloc(sizeof(TCHAR) *(lstrlenW(m_pCurDir) + 1));
 	lstrcpyW(pNewDir, m_pCurDir);
 
 	int PathLen = lstrlenW(pNewDir);
-	if (PathLen)
-	{
-		if (PathLen > 3)
-		{
-			WCHAR*p = pNewDir + lstrlenW(pNewDir) - 1;
+	if (PathLen){
+		if (PathLen > 3){
+			TCHAR*p = pNewDir + lstrlenW(pNewDir) - 1;
 			while (p >= pNewDir && p[0] != '\\' && p[0] != '/')
 				p--;
 			p[0] = 0;
@@ -208,26 +217,24 @@ void CFileManager::OnUp()
 void CFileManager::OnChangeDir(char*Buffer)
 {
 	//一个字节statu + CurLocation + List.;
-	WCHAR*pNewDir = (WCHAR*)Buffer;
+	TCHAR*pNewDir = (TCHAR*)Buffer;
 	BOOL bStatu = ChDir(pNewDir);
 	DWORD dwBufLen = 0;
 	dwBufLen += 1;
-	dwBufLen += sizeof(WCHAR) *(lstrlenW(m_pCurDir) + 1);
+	dwBufLen += sizeof(TCHAR) *(lstrlenW(m_pCurDir) + 1);
 	char*Buff = (char*)malloc(dwBufLen);
 	Buff[0] = bStatu;
-	lstrcpyW((WCHAR*)&Buff[1], m_pCurDir);
-	Send(FILE_MGR_CHDIR_RET, Buff, dwBufLen);
+	lstrcpyW((TCHAR*)&Buff[1], m_pCurDir);
+	SendMsg(FILE_MGR_CHDIR_RET, Buff, dwBufLen);
 	free(Buff);
 }
 
 void CFileManager::OnGetCurList()
 {
-	if (!lstrlenW(m_pCurDir))
-	{
+	if (!lstrlenW(m_pCurDir)){
 		SendDriverList();
 	}
-	else
-	{
+	else{
 		SendFileList();
 	}
 }
@@ -237,11 +244,9 @@ void CFileManager::SendDriverList()
 	DriverInfo	dis[26] = { 0 };				//最多26
 	DWORD		dwUsed = 0;
 	DWORD dwDrivers = GetLogicalDrives();
-	WCHAR szRoot[] = { 'A',':','\\',0 };
-	while (dwDrivers)
-	{
-		if (dwDrivers & 1)
-		{
+	TCHAR szRoot[] = { 'A',':','\\',0 };
+	while (dwDrivers){
+		if (dwDrivers & 1){
 			DriverInfo*pDi = &dis[dwUsed++];
 			pDi->szName[0] = szRoot[0];
 
@@ -260,13 +265,13 @@ void CFileManager::SendDriverList()
 		szRoot[0]++;
 	}
 	//发送回复.
-	Send(FILE_MGR_GETLIST_RET, (char*)&dis, sizeof(DriverInfo) * dwUsed);
+	SendMsg(FILE_MGR_GETLIST_RET, (char*)&dis, sizeof(DriverInfo) * dwUsed);
 }
 
 
 void CFileManager::SendFileList()
 {
-	WCHAR *StartDir = (WCHAR*)malloc((lstrlenW(m_pCurDir) + 3) * sizeof(WCHAR));
+	TCHAR *StartDir = (TCHAR*)malloc((lstrlenW(m_pCurDir) + 3) * sizeof(TCHAR));
 	lstrcpyW(StartDir, m_pCurDir);
 	lstrcatW(StartDir, L"\\*");
 
@@ -283,7 +288,7 @@ void CFileManager::SendFileList()
 			(wcscmp(fd.cFileName, L".") && wcscmp(fd.cFileName, L".."))
 			)
 		{
-			if ((dwCurBuffSize - dwUsed) < (sizeof(FmFileInfo) + sizeof(WCHAR) * lstrlenW(fd.cFileName)))
+			if ((dwCurBuffSize - dwUsed) < (sizeof(FmFileInfo) + sizeof(TCHAR) * lstrlenW(fd.cFileName)))
 			{
 				dwCurBuffSize *= 2;
 				FileList = (char*)realloc(FileList, dwCurBuffSize);
@@ -298,7 +303,7 @@ void CFileManager::SendFileList()
 
 			lstrcpyW(pFmFileInfo->szFileName, fd.cFileName);
 
-			dwUsed += (((char*)(pFmFileInfo->szFileName) - (char*)pFmFileInfo) + sizeof(WCHAR)* (lstrlenW(fd.cFileName) + 1));
+			dwUsed += (((char*)(pFmFileInfo->szFileName) - (char*)pFmFileInfo) + sizeof(TCHAR)* (lstrlenW(fd.cFileName) + 1));
 		}
 
 		bNext = FindNextFileW(hFirst, &fd);
@@ -317,11 +322,11 @@ void CFileManager::SendFileList()
 	dwUsed += sizeof(FmFileInfo);
 
 	//发送回复.;
-	Send(FILE_MGR_GETLIST_RET, FileList, dwUsed);
+	SendMsg(FILE_MGR_GETLIST_RET, FileList, dwUsed);
 	free(FileList);
 }
 
-BOOL CFileManager::ChDir(const WCHAR* Dir)
+BOOL CFileManager::ChDir(const TCHAR* Dir)
 {
 	BOOL bResult = FALSE;
 	BOOL bIsDrive = FALSE;
@@ -332,7 +337,7 @@ BOOL CFileManager::ChDir(const WCHAR* Dir)
 		return TRUE;
 	}
 	//
-	WCHAR	*pTemp = (WCHAR*)malloc(sizeof(WCHAR) * (lstrlenW(Dir) + 3));
+	TCHAR	*pTemp = (TCHAR*)malloc(sizeof(TCHAR) * (lstrlenW(Dir) + 3));
 	lstrcpyW(pTemp, Dir);
 
 	if ((Dir[0] <'A' || Dir[0]>'Z') &&
@@ -342,8 +347,8 @@ BOOL CFileManager::ChDir(const WCHAR* Dir)
 		return FALSE;
 	//加上\\*
 	lstrcatW(pTemp, L"\\*");
-	const WCHAR*pIt = &pTemp[3];
-	WCHAR*pNew = &pTemp[2];
+	const TCHAR*pIt = &pTemp[3];
+	TCHAR*pNew = &pTemp[2];
 	while (pNew[0])
 	{
 		*pNew++ = '\\';
@@ -383,20 +388,22 @@ void CFileManager::OnUploadFromUrl(char*lpszUrl)
 {
 	//Save Path + Url,Init param.
 	CFileDownloader::InitParam*pInitParam = (CFileDownloader::InitParam*)
-		calloc(1, sizeof(DWORD) + sizeof(WCHAR)* (lstrlenW(m_pCurDir) + 1 + lstrlenW((WCHAR*)lpszUrl) + 1));
+		calloc(1, sizeof(DWORD) + sizeof(TCHAR)* (lstrlenW(m_pCurDir) + 1 + lstrlenW((TCHAR*)lpszUrl) + 1));
 
 	pInitParam->dwFlags &= 0;
 
 	lstrcpyW(pInitParam->szURL, m_pCurDir);
 	lstrcatW(pInitParam->szURL, L"\n");
-	lstrcatW(pInitParam->szURL, ((WCHAR*)lpszUrl));
+	lstrcatW(pInitParam->szURL, ((TCHAR*)lpszUrl));
 	//
 	ModuleCtx*pCtx = (ModuleCtx*)malloc(sizeof(ModuleCtx));
 	
 	pCtx->lpEntry = BeginDownload;
 	pCtx->lpParam = pInitParam;
 
-	GetSrvName(pCtx->szServerAddr, pCtx->uPort);
+	const auto peer = GetPeerName();
+	lstrcpyA(pCtx->szServerAddr, peer.first.c_str());
+	pCtx->uPort = peer.second;
 	//
 	typedef unsigned int(__stdcall *typeThreadProc)(void*);
 
@@ -412,15 +419,17 @@ void CFileManager::OnUploadFromDisk(char*FileList)
 	pCtx->lpEntry = BeginFileTrans;
 	pCtx->lpParam = NULL;
 	////获取服务器
-	GetSrvName(pCtx->szServerAddr, pCtx->uPort);
+	const auto peer = GetPeerName();
+	lstrcpyA(pCtx->szServerAddr, peer.first.c_str());
+	pCtx->uPort = peer.second;
 
 	CFileTrans::CMiniFileTransInit*pInitParam = (CFileTrans::CMiniFileTransInit*)
-		malloc(sizeof(DWORD) + sizeof(WCHAR)*(lstrlenW(m_pCurDir) + 1 + lstrlenW((WCHAR*)FileList) + 1));
+		malloc(sizeof(DWORD) + sizeof(TCHAR)*(lstrlenW(m_pCurDir) + 1 + lstrlenW((TCHAR*)FileList) + 1));
 	
 	pInitParam->m_dwDuty = MNFT_DUTY_RECEIVER;
 	lstrcpyW(pInitParam->m_Buffer, m_pCurDir);
 	lstrcatW(pInitParam->m_Buffer, L"\n");
-	lstrcatW(pInitParam->m_Buffer, (WCHAR*)FileList);
+	lstrcatW(pInitParam->m_Buffer, (TCHAR*)FileList);
 	////Get Init Data.
 	pCtx->lpParam = pInitParam;
 
@@ -438,13 +447,15 @@ void CFileManager::OnDownload(char*FileList)
 	pCtx->lpEntry = BeginFileTrans;
 	pCtx->lpParam = NULL;
 	////获取服务器
-	GetSrvName(pCtx->szServerAddr, pCtx->uPort);
+	auto const peer = GetPeerName();
+	lstrcpyA(pCtx->szServerAddr, peer.first.c_str());
+	pCtx->uPort = peer.second;
 
 	CFileTrans::CMiniFileTransInit*pInitParam = (CFileTrans::CMiniFileTransInit*)
-		malloc(sizeof(DWORD) + sizeof(WCHAR)*(lstrlenW((WCHAR*)FileList) + 1));
+		malloc(sizeof(DWORD) + sizeof(TCHAR)*(lstrlenW((TCHAR*)FileList) + 1));
 
 	pInitParam->m_dwDuty = MNFT_DUTY_SENDER;
-	lstrcpyW(pInitParam->m_Buffer, (WCHAR*)FileList);
+	lstrcpyW(pInitParam->m_Buffer, (TCHAR*)FileList);
 	////Get Init Data.
 	pCtx->lpParam = pInitParam;
 
@@ -462,7 +473,7 @@ void CFileManager::OnRunFile(DWORD Event,char*buffer)
 	if (Event == FILE_MGR_RUNFILE_HIDE)
 		dwShow = SW_HIDE;
 
-	WCHAR*pIt = (WCHAR*)buffer;
+	TCHAR*pIt = (TCHAR*)buffer;
 	while (pIt[0])
 	{
 		//跳过\n;
@@ -470,13 +481,13 @@ void CFileManager::OnRunFile(DWORD Event,char*buffer)
 			pIt++;
 		if (pIt[0])
 		{
-			WCHAR*pFileName = pIt;
+			TCHAR*pFileName = pIt;
 			//找到结尾.;
 			while (pIt[0] && pIt[0] != '\n') pIt++;
-			WCHAR old = pIt[0];
+			TCHAR old = pIt[0];
 			pIt[0] = 0;
 			//
-			WCHAR*pFile = (WCHAR*)malloc((lstrlenW(m_pCurDir)+ 1 + lstrlenW(pFileName) + 1) * sizeof(WCHAR));
+			TCHAR*pFile = (TCHAR*)malloc((lstrlenW(m_pCurDir)+ 1 + lstrlenW(pFileName) + 1) * sizeof(TCHAR));
 			lstrcpyW(pFile, m_pCurDir);
 			lstrcatW(pFile, L"\\");
 			lstrcatW(pFile, pFileName);
@@ -499,10 +510,10 @@ void CFileManager::OnNewFolder(char*buffer)
 {
 	if (lstrlenW(m_pCurDir) == 0)
 		return;
-	WCHAR *pNewDir = (WCHAR*)malloc(sizeof(WCHAR)*(lstrlenW(m_pCurDir) + 1 + lstrlenW((WCHAR*)buffer) + 1));
+	TCHAR *pNewDir = (TCHAR*)malloc(sizeof(TCHAR)*(lstrlenW(m_pCurDir) + 1 + lstrlenW((TCHAR*)buffer) + 1));
 	lstrcpyW(pNewDir, m_pCurDir);
 	lstrcatW(pNewDir, L"\\");
-	lstrcatW(pNewDir, (WCHAR*)buffer);
+	lstrcatW(pNewDir, (TCHAR*)buffer);
 	CreateDirectoryW(pNewDir,0);
 	free(pNewDir);
 }
@@ -510,21 +521,21 @@ void CFileManager::OnRename(char*buffer)
 {
 	if (lstrlenW(m_pCurDir) == 0)
 		return;
-	WCHAR*pNewName = NULL;
+	TCHAR*pNewName = NULL;
 
-	if ((pNewName = wcsstr((WCHAR*)buffer, L"\n")) == 0)
+	if ((pNewName = wcsstr((TCHAR*)buffer, L"\n")) == 0)
 		return;
 	*pNewName++ = 0;
 
-	WCHAR*pOldFile = (WCHAR*)malloc(sizeof(WCHAR)*(lstrlenW(m_pCurDir) + 1 + lstrlenW((WCHAR*)buffer) + 1));
-	WCHAR*pNewFile = (WCHAR*)malloc(sizeof(WCHAR)*(lstrlenW(m_pCurDir) + 1 + lstrlenW(pNewName) + 1));
+	TCHAR*pOldFile = (TCHAR*)malloc(sizeof(TCHAR)*(lstrlenW(m_pCurDir) + 1 + lstrlenW((TCHAR*)buffer) + 1));
+	TCHAR*pNewFile = (TCHAR*)malloc(sizeof(TCHAR)*(lstrlenW(m_pCurDir) + 1 + lstrlenW(pNewName) + 1));
 	lstrcpyW(pOldFile, m_pCurDir);
 	lstrcpyW(pNewFile, m_pCurDir);
 
 	lstrcatW(pOldFile, L"\\");
 	lstrcatW(pNewFile, L"\\");
 
-	lstrcatW(pOldFile, (WCHAR*)buffer);
+	lstrcatW(pOldFile, (TCHAR*)buffer);
 	lstrcatW(pNewFile, pNewName);
 	MoveFileW(pOldFile, pNewFile);
 
@@ -533,13 +544,13 @@ void CFileManager::OnRename(char*buffer)
 }
 
 
-BOOL MakesureDirExist(const WCHAR* Path, BOOL bIncludeFileName = FALSE);
+BOOL MakesureDirExist(const TCHAR* Path, BOOL bIncludeFileName = FALSE);
 
-typedef void(*callback)(WCHAR*szFile, BOOL bIsDir, DWORD dwParam);
+typedef void(*callback)(TCHAR*szFile, BOOL bIsDir, DWORD dwParam);
 
-static void dfs_BrowseDir(WCHAR*Dir, callback pCallBack,DWORD dwParam)
+static void dfs_BrowseDir(TCHAR*Dir, callback pCallBack,DWORD dwParam)
 {
-	WCHAR*pStartDir = (WCHAR*)malloc(sizeof(WCHAR)*(lstrlenW(Dir) + 3));
+	TCHAR*pStartDir = (TCHAR*)malloc(sizeof(TCHAR)*(lstrlenW(Dir) + 3));
 	lstrcpyW(pStartDir, Dir);
 	lstrcatW(pStartDir, L"\\*");
 
@@ -551,7 +562,7 @@ static void dfs_BrowseDir(WCHAR*Dir, callback pCallBack,DWORD dwParam)
 		if (!(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY) ||
 			(wcscmp(fd.cFileName, L".") && wcscmp(fd.cFileName, L"..")))
 		{
-			WCHAR*szFileName = (WCHAR*)malloc(sizeof(WCHAR)*(lstrlenW(Dir) + 1 + lstrlenW(fd.cFileName) + 1));
+			TCHAR*szFileName = (TCHAR*)malloc(sizeof(TCHAR)*(lstrlenW(Dir) + 1 + lstrlenW(fd.cFileName) + 1));
 			lstrcpyW(szFileName, Dir);
 			lstrcatW(szFileName, L"\\");
 			lstrcatW(szFileName, fd.cFileName);
@@ -571,7 +582,7 @@ static void dfs_BrowseDir(WCHAR*Dir, callback pCallBack,DWORD dwParam)
 	free(pStartDir);
 }
 
-void FMDeleteFile(WCHAR*szFileName, BOOL bIsDir,DWORD dwParam)
+void FMDeleteFile(TCHAR*szFileName, BOOL bIsDir,DWORD dwParam)
 {
 	if (bIsDir)
 	{
@@ -586,8 +597,8 @@ void CFileManager::OnDelete(char*buffer)
 	if (lstrlenW(m_pCurDir) == 0)
 		return;
 	//文件名用\n隔开
-	WCHAR*pIt = (WCHAR*)buffer;
-	WCHAR*pFileName;
+	TCHAR*pIt = (TCHAR*)buffer;
+	TCHAR*pFileName;
 	while (pIt[0])
 	{
 		//跳过\n
@@ -600,10 +611,10 @@ void CFileManager::OnDelete(char*buffer)
 			//找到结尾.
 			while (pIt[0] && pIt[0] != '\n')
 				pIt++;
-			WCHAR old = pIt[0];
+			TCHAR old = pIt[0];
 			pIt[0] = 0;
 			//
-			WCHAR*szFile = (WCHAR*)malloc(sizeof(WCHAR) * (lstrlenW(m_pCurDir) + 1 + lstrlenW(pFileName) + 1));
+			TCHAR*szFile = (TCHAR*)malloc(sizeof(TCHAR) * (lstrlenW(m_pCurDir) + 1 + lstrlenW(pFileName) + 1));
 			lstrcpyW(szFile, m_pCurDir);
 			lstrcatW(szFile, L"\\");
 			lstrcatW(szFile, pFileName);
@@ -633,11 +644,11 @@ void CFileManager::OnDelete(char*buffer)
 
 void CFileManager::OnCopy(char*buffer)
 {
-	WCHAR*p = NULL;
-	if ((p = wcsstr((WCHAR*)buffer, L"\n")))
+	TCHAR*p = NULL;
+	if ((p = wcsstr((TCHAR*)buffer, L"\n")))
 	{
 		*p++ = NULL;
-		lstrcpyW(m_SrcPath, (WCHAR*)buffer);
+		lstrcpyW(m_SrcPath, (TCHAR*)buffer);
 		lstrcpyW(m_FileList, p);
 		m_bMove = FALSE;
 	}
@@ -646,28 +657,28 @@ void CFileManager::OnCopy(char*buffer)
 
 void CFileManager::OnCut(char*buffer)
 {
-	WCHAR*p = NULL;
-	if ((p = wcsstr((WCHAR*)buffer, L"\n")))
+	TCHAR*p = NULL;
+	if ((p = wcsstr((TCHAR*)buffer, L"\n")))
 	{
 		*p++ = NULL;
-		lstrcpyW(m_SrcPath, (WCHAR*)buffer);
+		lstrcpyW(m_SrcPath, (TCHAR*)buffer);
 		lstrcpyW(m_FileList, p);
 		m_bMove = TRUE;
 	}
 }
 
-void CFileManager::FMCpOrMvFile(WCHAR*szFileName, BOOL bIsDir, DWORD dwParam)
+void CFileManager::FMCpOrMvFile(TCHAR*szFileName, BOOL bIsDir, DWORD dwParam)
 {
 	//复制操作目录不用管,该目录下面的所有文件已经复制完了.
 	CFileManager*pMgr = (CFileManager*)dwParam;
-	WCHAR*pNewFileName = NULL;
+	TCHAR*pNewFileName = NULL;
 	if (bIsDir)
 	{
 		if (pMgr->m_bMove)
 			RemoveDirectoryW(szFileName);
 		return;
 	}
-	pNewFileName = (WCHAR*)malloc(sizeof(WCHAR)*(lstrlenW(pMgr->m_pCurDir) + 1 + lstrlenW(szFileName) - lstrlenW(pMgr->m_SrcPath) + 1));
+	pNewFileName = (TCHAR*)malloc(sizeof(TCHAR)*(lstrlenW(pMgr->m_pCurDir) + 1 + lstrlenW(szFileName) - lstrlenW(pMgr->m_SrcPath) + 1));
 	//
 	lstrcpyW(pNewFileName, pMgr->m_pCurDir);
 	lstrcatW(pNewFileName, szFileName + lstrlenW(pMgr->m_SrcPath));
@@ -680,6 +691,12 @@ void CFileManager::FMCpOrMvFile(WCHAR*szFileName, BOOL bIsDir, DWORD dwParam)
 	free(pNewFileName);
 }
 
+/*
+	2022-10-24
+	1.先找出所有文件，保存起来，并发送给服务端总个数
+	2.没完成一个之后，就发一个信息。(进度更新)
+
+*/
 
 void CFileManager::OnPaste(char*buffer)
 {
@@ -690,8 +707,8 @@ void CFileManager::OnPaste(char*buffer)
 	if (wcscmp(m_pCurDir, m_SrcPath) == 0)
 		return;
 
-	WCHAR*pIt = m_FileList;
-	WCHAR*pFileName;
+	TCHAR*pIt = m_FileList;
+	TCHAR*pFileName;
 	while (pIt[0])
 	{
 		pFileName = NULL;
@@ -703,10 +720,10 @@ void CFileManager::OnPaste(char*buffer)
 			//找到结尾.
 			while (pIt[0] && pIt[0] != '\n')
 				pIt++;
-			WCHAR old = pIt[0];
+			TCHAR old = pIt[0];
 			pIt[0] = 0;
 			//源文件
-			WCHAR*szSrcFile = (WCHAR*)malloc(sizeof(WCHAR) * (lstrlenW(m_SrcPath) + 1 + lstrlenW(pFileName) + 1));
+			TCHAR*szSrcFile = (TCHAR*)malloc(sizeof(TCHAR) * (lstrlenW(m_SrcPath) + 1 + lstrlenW(pFileName) + 1));
 			lstrcpyW(szSrcFile, m_SrcPath);
 			lstrcatW(szSrcFile, L"\\");
 			lstrcatW(szSrcFile, pFileName);
@@ -734,7 +751,7 @@ void CFileManager::OnPaste(char*buffer)
 					else
 					{
 						//单个文件,复制或移动到当前目录.
-						WCHAR*pNewFile = (WCHAR*)malloc(sizeof(WCHAR)*(lstrlenW(m_pCurDir) + 1 + lstrlenW(fd.cFileName) + 1));
+						TCHAR*pNewFile = (TCHAR*)malloc(sizeof(TCHAR)*(lstrlenW(m_pCurDir) + 1 + lstrlenW(fd.cFileName) + 1));
 						lstrcpyW(pNewFile, m_pCurDir);
 						lstrcatW(pNewFile, L"\\");
 						lstrcatW(pNewFile, fd.cFileName);
@@ -760,7 +777,9 @@ void CFileManager::OnSearch()
 	pCtx->lpEntry = BeginSearch;
 	pCtx->lpParam = NULL;
 	
-	GetSrvName(pCtx->szServerAddr, pCtx->uPort);
+	const auto peer = GetPeerName();
+	lstrcpyA(pCtx->szServerAddr, peer.first.c_str());
+	pCtx->uPort = peer.second;
 
 	typedef unsigned int(__stdcall *typeThreadProc)(void*);
 
@@ -770,49 +789,3 @@ void CFileManager::OnSearch()
 		CloseHandle(hThread);
 	}
 }
-
-BOOL MakesureDirExist(const WCHAR* Path, BOOL bIncludeFileName)
-{
-	WCHAR*pTempDir = (WCHAR*)malloc((lstrlenW(Path) + 1)*sizeof(WCHAR));
-	lstrcpyW(pTempDir, Path);
-	BOOL bResult = FALSE;
-	WCHAR* pIt = NULL;
-	//找到文件名.;
-	if (bIncludeFileName)
-	{
-		pIt = pTempDir + lstrlenW(pTempDir) - 1;
-		while (pIt[0] != '\\' && pIt[0] != '/' && pIt > pTempDir) pIt--;
-		if (pIt[0] != '/' && pIt[0] != '\\')
-			goto Return;
-		//'/' ---> 0
-		pIt[0] = 0;
-	}
-	//找到':';
-	if ((pIt = wcsstr(pTempDir, L":")) == NULL || (pIt[1] != '\\' && pIt[1] != '/'))
-		goto Return;
-	pIt++;
-
-	while (pIt[0])
-	{
-		WCHAR oldCh;
-		//跳过'/'或'\\';
-		while (pIt[0] && (pIt[0] == '\\' || pIt[0] == '/'))
-			pIt++;
-		//找到结尾.;
-		while (pIt[0] && (pIt[0] != '\\' && pIt[0] != '/'))
-			pIt++;
-		//
-		oldCh = pIt[0];
-		pIt[0] = 0;
-
-		if (!CreateDirectoryW(pTempDir, NULL) && GetLastError() != ERROR_ALREADY_EXISTS)
-			goto Return;
-
-		pIt[0] = oldCh;
-	}
-	bResult = TRUE;
-Return:
-	free(pTempDir);
-	return bResult;
-}
-

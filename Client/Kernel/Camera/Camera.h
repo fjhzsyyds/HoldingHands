@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "..\Common\MsgHandler.h"
 #include "CameraGrab.h"
 #define CAMERA			('C'|('A'<<8)|('M'<<16)|('E')<<24)
 #define CAMERA_DEVICELIST			(0xabc1)
@@ -16,7 +16,7 @@
 #define CAMERA_ERROR				(0x0000)
 
 class CCamera :
-	public CEventHandler
+	public CMsgHandler
 {
 private:
 	CCameraGrab m_Grab;
@@ -26,17 +26,19 @@ private:
 
 public:
 
-	void OnStart(int idx,DWORD dwWidth,DWORD dwHeight);
+	void OnStart(const string &device_name, int compression, int bitcount, int width, int height);
 	void OnStop();
 
-	void OnConnect();
+	void OnOpen();
 	void OnClose();
-	void OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Buffer);
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer){}
+
+	CCamera(CManager*pManager);
 
 
 	void static WorkThread(CCamera*pThis);
 
-	CCamera();
 	~CCamera();
 };
 

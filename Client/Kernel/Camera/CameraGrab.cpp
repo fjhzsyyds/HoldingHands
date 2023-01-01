@@ -28,106 +28,85 @@ CCameraGrab::CCameraGrab()
 	m_pCallback = NULL;
 	m_dwBufSize = NULL;
 
-	m_pFrameListHead = m_pFrameListTail = NULL;
-	//
 	m_pEncoder = NULL;
 	m_pPicOut = NULL;
 	m_pPicIn = NULL;
-	//
-	m_defaultCompression = -1;
 }
 
 
 CCameraGrab::~CCameraGrab()
 {
-	//printf("CCameraGrab::~CCameraGrab()\n");
 	GrabberTerm();
-	//printf("CCameraGrab::~CCameraGrab() OK \n");
 }
 
 void CCameraGrab::GrabberTerm()
 {
-	//printf("Grabber Term start\n");
-	if (m_pMediaControl)
-	{
+	if (m_pMediaControl){
 		m_pMediaControl->Stop();
 		m_pMediaControl->Release();
 		m_pMediaControl = NULL;
 	}
-	if (m_hMutex)
-	{
+
+	if (m_hMutex){
 		CloseHandle(m_hMutex);
 		m_hMutex = NULL;
 	}
-	if (m_hEvent)
-	{
+	if (m_hEvent){
 		CloseHandle(m_hEvent);
 		m_hEvent = NULL;
 	}
 
-	if (m_pGraph)
-	{
+	if (m_pGraph){
 		m_pGraph->Release();
 		m_pGraph = NULL;
 	}
-	if (m_pBuild)
-	{
+	if (m_pBuild){
 		m_pBuild->Release();
 		m_pBuild = NULL;
 	}
-	if (m_pCaptureFilter)
-	{
+	if (m_pCaptureFilter){
 		m_pCaptureFilter->Release();
 		m_pCaptureFilter = NULL;
 	}
 
-	if (m_pSamplerGrabber)
-	{
+	if (m_pSamplerGrabber){
 		m_pSamplerGrabber->Release();
 		m_pSamplerGrabber = NULL;
 	}
 
-	if (m_pSampleGrabberFilter)
-	{
+	if (m_pSampleGrabberFilter){
 		m_pSampleGrabberFilter->Release();
 		m_pSampleGrabberFilter = NULL;
 	}
-	if (m_pNullRenderer)
-	{
+	if (m_pNullRenderer){
 		m_pNullRenderer->Release();
 		m_pNullRenderer = NULL;
 	}
-	if (m_pCallback)
-	{
+	if (m_pCallback){
 		delete m_pCallback;
 		m_pCallback = NULL;
 	}
-	FrameList*p = m_pFrameListHead;
-	while (p)
-	{
-		FrameList*pTemp = p;
-		p = p->next;
-		free(pTemp->frame.m_buffer);
-		free(pTemp);
+
+	for (auto &frame : m_FrameList){
+		if (frame.first){
+			cout << std::hex << frame.first << endl;
+			delete[] frame.first;
+		}
 	}
-	m_pFrameListHead = NULL;
-	m_pFrameListTail = NULL;
+	m_FrameList.clear();
 	m_dwBufSize = NULL;
 
 	//x264
-	if (m_pEncoder)
-	{
+	if (m_pEncoder){
 		x264_encoder_close(m_pEncoder);
 		m_pEncoder = NULL;
 	}
-	if (m_pPicIn)
-	{
+	if (m_pPicIn){
 		x264_picture_clean(m_pPicIn);
 		free(m_pPicIn);
 		m_pPicIn = NULL;
 	}
-	if (m_pPicOut)
-	{
+	if (m_pPicOut){
 		free(m_pPicOut);
 		m_pPicOut = NULL;
 	}
@@ -141,56 +120,41 @@ void CCameraGrab::AddTail(char*buffer,DWORD dwLen)
 	if (m_dwBufSize > MAX_BUF_SIZE)
 		return;
 	
-	FrameList*pNewFrame = (FrameList*)malloc(sizeof(FrameList));
-	pNewFrame->next = NULL;
-	pNewFrame->frame.m_buffer = (char*)malloc(dwLen);
-	pNewFrame->frame.m_dwLength = dwLen;
-
-	memcpy(pNewFrame->frame.m_buffer, buffer, dwLen);
-
-	WaitForSingleObject(m_hMutex, INFINITE);
+	//Save Data...
+	pair<char*, DWORD> frame(new char[dwLen],dwLen);
 
 	m_dwBufSize += dwLen;
-	if (m_pFrameListHead == NULL)
-	{
-		m_pFrameListHead = m_pFrameListTail = pNewFrame;
-	}
-	else
-	{
-		m_pFrameListTail->next = pNewFrame;
-		m_pFrameListTail = pNewFrame;
-	}
-	SetEvent(m_hEvent);
+	memcpy(frame.first, buffer, dwLen);
+	
+	//list lock....
+	WaitForSingleObject(m_hMutex, INFINITE);
+	m_FrameList.push_back(frame);
 
+	SetEvent(m_hEvent);
 	SetEvent(m_hMutex);
 }
 void CCameraGrab::RemoveHead(char**ppBuffer,DWORD*pLen)
 {
-	//printf("Remove Head\n");
-	FrameList*pFrame = NULL;
+	pair<char*, DWORD > frame(nullptr,0);
 	while (true)
 	{
 		WaitForSingleObject(m_hMutex, INFINITE);
-		pFrame = m_pFrameListHead;
+		if (m_FrameList.size()){
+			frame = m_FrameList.front();
+			m_FrameList.pop_front();
+		}
 
-		if (m_pFrameListHead == m_pFrameListTail)
-			m_pFrameListHead = m_pFrameListTail = NULL;
+		if (!frame.first)								//buffer 为空.
+			ResetEvent(m_hEvent);						//如果没有数据了...,
 		else
-			m_pFrameListHead = m_pFrameListHead->next;
-
-		if (!pFrame)
-			ResetEvent(m_hEvent);
-		else
-			m_dwBufSize -= pFrame->frame.m_dwLength;
+			m_dwBufSize -= frame.second;
 
 		SetEvent(m_hMutex);
 
-		if (!pFrame)
-		{
+		if (!frame.first){
 			//printf("No Frame,Wait ForSingle Object\n");
-			if (WAIT_TIMEOUT == WaitForSingleObject(m_hEvent, 3000))
-			{
-				//printf("Wait For Single Object Time Out\n");
+			if (WAIT_TIMEOUT == WaitForSingleObject(m_hEvent, 3000)){
+				//有事件时,这时候链表里面就有数据了...
 				*ppBuffer = NULL;
 				*pLen = NULL;
 				return;
@@ -199,19 +163,18 @@ void CCameraGrab::RemoveHead(char**ppBuffer,DWORD*pLen)
 		else
 			break;
 	}
-	*ppBuffer = pFrame->frame.m_buffer;
-	*pLen = pFrame->frame.m_dwLength;
-	free(pFrame);
+	*ppBuffer = frame.first;
+	*pLen = frame.second;
 }
 
-list<CCameraGrab::DeviceInfo>& CCameraGrab::GetDeviceList()
-{
-	m_DeviceList.clear();
-	GetDeviceList(-1, 0);
-	return m_DeviceList;
+VideoInfoList& CCameraGrab::GetDeviceList()
+{ 
+	m_device.clear();
+	GetDeviceList(string(""), 0);
+	return m_device;
 }
 
-void CCameraGrab::GetDeviceList(int DeviceIdx, IBaseFilter**ppBaseFilter)
+void CCameraGrab::GetDeviceList(const string& query_name, IBaseFilter**ppBaseFilter)
 {
 	HRESULT hr = NULL;
 	ICreateDevEnum*pDevEnum = NULL;
@@ -222,141 +185,152 @@ void CCameraGrab::GetDeviceList(int DeviceIdx, IBaseFilter**ppBaseFilter)
 
 	hr = CoCreateInstance(CLSID_SystemDeviceEnum, NULL, CLSCTX_INPROC_SERVER,
 		IID_ICreateDevEnum, (void **)&pDevEnum);
-	if (FAILED(hr) || !pDevEnum)
-	{	
+	if (FAILED(hr) || !pDevEnum){	
 		goto Failed;
 	}
 	hr = pDevEnum->CreateClassEnumerator(CLSID_VideoInputDeviceCategory, &pEnumMoniker, 0);
-	//
-	if (FAILED(hr) || !pEnumMoniker)
-	{	
+	if (FAILED(hr) || !pEnumMoniker){	
 		goto Failed;
 	}
-	while (hr = pEnumMoniker->Next(1, &pMoniker, NULL), hr == S_OK&& pMoniker&&bLoop)
-	{
-		IPropertyBag *pProBag;
+
+	for (hr = pEnumMoniker->Next(1, &pMoniker, NULL);
+		hr == S_OK&&pMoniker&&bLoop;
+		hr = pEnumMoniker->Next(1, &pMoniker, NULL)){
+
+		VARIANT varTemp;
+		IPropertyBag *pProBag = NULL;
+		string device_name;
 
 		hr = pMoniker->BindToStorage(0, 0, IID_IPropertyBag, (LPVOID*)&pProBag);
-		if (SUCCEEDED(hr) && pProBag)
-		{
-			VARIANT varTemp;
-			varTemp.vt = VT_BSTR;
-			hr = pProBag->Read(L"FriendlyName", &varTemp, NULL);
-			if (SUCCEEDED(hr) && DeviceIdx == -1)
-			{
-				CCameraGrab::DeviceInfo device;
-				lstrcpyW(device.szName, varTemp.bstrVal);
+		if (hr != S_OK || pProBag == NULL){
+			goto failed;
+		}
+		//获取设备名称....
+		varTemp.vt = VT_BSTR;
+		hr = pProBag->Read(TEXT("FriendlyName"), &varTemp, NULL);
+		TCHAR * w_name = (TCHAR *)varTemp.bstrVal;
+		//wide byte to g2312....
+		int len = WideCharToMultiByte(CP_ACP, 0, w_name, lstrlenW(w_name), nullptr, 0, nullptr, nullptr);
+		device_name.resize(len + 1,0);
+		WideCharToMultiByte(CP_ACP, 0, w_name, lstrlenW(w_name), 
+			(char*)device_name.c_str(), len, nullptr, nullptr);
 
-				IBaseFilter*	pBaseFilter = NULL;
-				hr = pMoniker->BindToObject(0, 0, IID_IBaseFilter, (LPVOID*)&pBaseFilter);
-				if (SUCCEEDED(hr) && pBaseFilter)
-				{
-					IEnumPins* pIEnumPins = 0;
-					IPin *pIPin = NULL;
-					hr = pBaseFilter->EnumPins(&pIEnumPins);
+		SysFreeString(varTemp.bstrVal);
 
-					while (pIEnumPins && (hr = pIEnumPins->Next(1, &pIPin, NULL), SUCCEEDED(hr)) && pIPin)
-					{
-						IEnumMediaTypes* pMt = NULL;
-						if (pIPin && SUCCEEDED(hr) && (hr = pIPin->EnumMediaTypes(&pMt), SUCCEEDED(hr)))
-						{
-							AM_MEDIA_TYPE *pMediaType = NULL;
-							while (pMt && (hr = pMt->Next(1, &pMediaType, NULL), SUCCEEDED(hr)) && pMediaType)
-							{
-								//emmmmmm还得考虑压缩的格式.
-								//
-								if (pMediaType->formattype == FORMAT_VideoInfo && pMediaType->cbFormat >= (sizeof(VIDEOINFOHEADER))
-									&& pMediaType->pbFormat)
-								{
-								
-									VIDEOINFOHEADER* pVideoInfoHeader = (VIDEOINFOHEADER*)pMediaType->pbFormat;
-									map<DWORD,DWORD>::iterator it = device.VideoSize.find(pVideoInfoHeader->bmiHeader.biWidth);
+		if (!SUCCEEDED(hr)){
+			goto failed;
+		}
 
-									if(m_defaultCompression == -1)
-									{
-										//emmmmm就选第一个压缩格式为默认格式吧.
-										char szDefaultCompress[5] = {0};
-										m_defaultCompression = pVideoInfoHeader->bmiHeader.biCompression;
-										*((DWORD*)szDefaultCompress) = m_defaultCompression;
+		
+		if (query_name.length() == 0 && m_device.size() == 0){			//获取所有设备信息..
+			IBaseFilter*	pBaseFilter = NULL;
+			hr = pMoniker->BindToObject(0, 0, IID_IBaseFilter, (LPVOID*)&pBaseFilter);
 
-										//printf("deault compression:%s\n",szDefaultCompress);
-									}
+			if (!SUCCEEDED(hr) || pBaseFilter == NULL){
+				if (pBaseFilter) pBaseFilter->Release();
+				goto failed;
+			}
+			///
+			IEnumPins* pIEnumPins = 0;
+			IPin *pIPin = NULL;
+			hr = pBaseFilter->EnumPins(&pIEnumPins);				//枚举引脚??是啥意思
+			/////
+			if (!SUCCEEDED(hr) || pIEnumPins == NULL){
+				if (pIEnumPins) pIEnumPins->Release();
+				goto failed;
+			}
 
-									//保存视频尺寸到map里面.
-									if (device.VideoSize.end() == it || it->second != pVideoInfoHeader->bmiHeader.biHeight)
-									{	
-										if(m_defaultCompression == pVideoInfoHeader->bmiHeader.biCompression)
-										{
-											device.VideoSize.insert(pair<DWORD, DWORD>(pVideoInfoHeader->bmiHeader.biWidth, pVideoInfoHeader->bmiHeader.biHeight));
-										}
-									}
-								}
+			for (hr = pIEnumPins->Next(1, &pIPin, NULL); 
+				SUCCEEDED(hr) && pIPin;
+				hr = pIEnumPins->Next(1, &pIPin, NULL)){
 
-								//释放资源.
-								if (pMediaType->cbFormat && pMediaType->pbFormat)
-								{
-									CoTaskMemFree(pMediaType->pbFormat);
-									pMediaType->pbFormat = NULL;
-									pMediaType->cbFormat = NULL;
-								}
-								if (pMediaType->pUnk)
-								{
-									pMediaType->pUnk->Release();
-									pMediaType->pUnk = NULL;
-								}
-								pMediaType = NULL;
+				IEnumMediaTypes* pMt = NULL;
+				AM_MEDIA_TYPE *pMediaType = NULL;
+
+				hr = pIPin->EnumMediaTypes(&pMt);
+				if (hr != S_OK){
+					pIPin->Release();
+					if (pMt){
+						pMt->Release();
+					}
+					continue;
+				}
+
+				for (hr = pMt->Next(1, &pMediaType, NULL);
+					SUCCEEDED(S_OK) && pMediaType;
+					hr = pMt->Next(1, &pMediaType, NULL)){
+
+					//emmmmmm还得考虑压缩的格式.
+					if (pMediaType->formattype == FORMAT_VideoInfo && 
+						pMediaType->cbFormat >= (sizeof(VIDEOINFOHEADER))
+						&& pMediaType->pbFormat){
+						VIDEOINFOHEADER* pVideoInfoHeader = (VIDEOINFOHEADER*)pMediaType->pbFormat;
+						int found = 0;
+						DWORD dwCompression = pVideoInfoHeader->bmiHeader.biCompression;
+						int width = pVideoInfoHeader->bmiHeader.biWidth;
+						int height = pVideoInfoHeader->bmiHeader.biHeight;
+						int bitcount = pVideoInfoHeader->bmiHeader.biBitCount;
+						
+						//保存起来...
+						for (auto & exist : m_device[device_name][dwCompression][bitcount]){
+							if (exist == pair<int, int>(width, height)){
+								found = 1;
+								break;
 							}
 						}
-						if (pIPin)
-						{
-							pIPin->Release();
-							pIPin = NULL;
+						//
+						if (!found){
+							m_device[device_name][dwCompression][bitcount].push_back(pair<int, int>(width, height));
 						}
 					}
-					if (pIEnumPins)
-					{
-						pIEnumPins->Release();
-						pIEnumPins = NULL;
+					//释放资源.
+					if (pMediaType->cbFormat && pMediaType->pbFormat){
+						CoTaskMemFree(pMediaType->pbFormat);
 					}
-					pBaseFilter->Release();
+					if (pMediaType->pUnk){
+						pMediaType->pUnk->Release();
+					}
+					pMediaType = nullptr;
 				}
-
-				SysFreeString(varTemp.bstrVal);
-				m_DeviceList.push_back(device);
-
+				pMt->Release(),pMt = nullptr;
+				pIPin->Release(), pIPin = nullptr;
 			}
-			pProBag->Release();
-			//为选择的IDX
-			if (i == DeviceIdx && ppBaseFilter)
-			{
-				bLoop = FALSE;
-				IBaseFilter*	pBaseFilter = NULL;
-				hr = pMoniker->BindToObject(0, 0, IID_IBaseFilter, (LPVOID*)&pBaseFilter);
-				if (SUCCEEDED(hr))
-				{
-					*ppBaseFilter = pBaseFilter;
-				}
-			}
-			i++;
+
+			pIEnumPins->Release(), pIEnumPins = nullptr;;
+			pBaseFilter->Release(), pBaseFilter = nullptr;
 		}
-		pMoniker->Release();
+		else if (query_name.length()){				//查询指定的设备..
+			IBaseFilter*	pBaseFilter = NULL;
+			bLoop = FALSE;
+			hr = pMoniker->BindToObject(0, 0, IID_IBaseFilter, (LPVOID*)&pBaseFilter);
+			if (SUCCEEDED(hr) && pBaseFilter){
+				*ppBaseFilter = pBaseFilter;
+			}
+		}
+		//
+	failed:
+		if (pMoniker)
+			pMoniker->Release();
+		if (pProBag)
+			pProBag->Release();
 	}
+
 Failed:
 	if (pEnumMoniker)
 		pEnumMoniker->Release();
+
 	if (pDevEnum)
 		pDevEnum->Release();
 }
 
-BOOL CCameraGrab::GrabberInit(int idx,DWORD dwWidth,DWORD dwHeight)
+int CCameraGrab::GrabberInit(const string&device_name, DWORD dwCompression,
+	DWORD dwBitCount, DWORD dwWidth, DWORD dwHeight,string&err)
 {
 	HRESULT hr = NULL;
 	AM_MEDIA_TYPE mt;
 	AM_MEDIA_TYPE * mmt = NULL;
 	IAMStreamConfig   *pConfig = NULL;
 	VIDEOINFOHEADER * pvih = NULL;
-	DWORD dwCompression;
-	DWORD	dwBitCount;
 	x264_param_t param = { 0 };
 
 	GrabberTerm();
@@ -365,33 +339,45 @@ BOOL CCameraGrab::GrabberInit(int idx,DWORD dwWidth,DWORD dwHeight)
 	m_dwWidth = dwWidth;
 	//
 	hr = CoCreateInstance(CLSID_FilterGraph, NULL, CLSCTX_INPROC_SERVER, IID_IGraphBuilder, (void**)&m_pGraph);
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 	//
 	hr = CoCreateInstance(CLSID_CaptureGraphBuilder2, NULL, CLSCTX_INPROC_SERVER, IID_ICaptureGraphBuilder2, (void**)&m_pBuild);
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 	//
 	hr = m_pBuild->SetFiltergraph(m_pGraph);
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 	//
-	GetDeviceList(idx, &m_pCaptureFilter);
-	if (!m_pCaptureFilter || (hr = m_pGraph->AddFilter(m_pCaptureFilter, L"Video Capture"), FAILED(hr)))
+	GetDeviceList(device_name,&m_pCaptureFilter);
+
+	if (!m_pCaptureFilter || (hr = m_pGraph->AddFilter(m_pCaptureFilter, L"Video Capture"), FAILED(hr))){
+		err = __LINE__;
 		goto Failed;
+	}
 	//
 	hr = CoCreateInstance(CLSID_SampleGrabber, NULL, CLSCTX_INPROC_SERVER,
 		IID_IBaseFilter, (LPVOID*)&m_pSampleGrabberFilter);
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 	//
 	hr = m_pSampleGrabberFilter->QueryInterface(IID_ISampleGrabber, (void**)&m_pSamplerGrabber);
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 	//
 	
 	ZeroMemory(&mt, sizeof(AM_MEDIA_TYPE));
-	
 	//设置输出视频格式.,SamplerGrabber的输出格式.
 	mt.majortype = MEDIATYPE_Video;
 	mt.subtype = MEDIASUBTYPE_ARGB32;
@@ -405,80 +391,82 @@ BOOL CCameraGrab::GrabberInit(int idx,DWORD dwWidth,DWORD dwHeight)
 
 	hr = CoCreateInstance(CLSID_NullRenderer, NULL, CLSCTX_INPROC_SERVER,
 		IID_IBaseFilter, (LPVOID*)&m_pNullRenderer);
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 	//
 	hr = m_pGraph->AddFilter(m_pSampleGrabberFilter, L"Sample Filter");
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 	hr = m_pGraph->AddFilter(m_pNullRenderer, L"Null Renderer");
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 	//
 	hr = m_pBuild->FindInterface(&PIN_CATEGORY_CAPTURE,
 		&MEDIATYPE_Video, m_pCaptureFilter, IID_IAMStreamConfig, (void **)&pConfig);
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 
 
 	//获取视频尺寸,先设置完尺寸再连接起来。
 	//设置捕获尺寸.
-
 	hr = pConfig->GetFormat(&mmt);    //取得默认参数
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 	//Set Capture Video Size;
 	pvih = (VIDEOINFOHEADER*)mmt->pbFormat;
 	pvih->bmiHeader.biHeight = dwHeight;
 	pvih->bmiHeader.biWidth = dwWidth;
+	pvih->bmiHeader.biCompression = dwCompression;
+	pvih->bmiHeader.biBitCount = dwBitCount;
 
-	//
-	dwBitCount = pvih->bmiHeader.biBitCount;
-	//dwCompression = pvih->bmiHeader.biCompression;
-	//并不总是能成功,设置位数和压缩格式,先尝试设置为无压缩的RGB 格式.
-	pvih->bmiHeader.biBitCount = 32;
-	pvih->bmiHeader.biCompression = BI_RGB;
 	hr = pConfig->SetFormat(mmt);
-	if (FAILED(hr))
-	{
-		//printf("Set Format RGB_32 Failed!\n");
-		pvih->bmiHeader.biBitCount = dwBitCount;
-		pvih->bmiHeader.biCompression = m_defaultCompression;
-		hr = pConfig->SetFormat(mmt);
+
+	if (FAILED(hr)){
+		err = __LINE__;
+		goto Failed;
 	}
-	else
-	{
-		//printf("Set Format RGB_32 Success!");
-	}
-	if (mmt->cbFormat && mmt->pbFormat)
-	{
+
+	if (mmt->cbFormat && mmt->pbFormat){
 		CoTaskMemFree(mmt->pbFormat);
 		mmt->pbFormat = NULL;
 		mmt->cbFormat = NULL;
 	}
-	if (mmt->pUnk)
-	{
+	if (mmt->pUnk){
 		mmt->pUnk->Release();
 		mmt->pUnk = NULL;
 	}
 	pConfig->Release();
-	if (FAILED(hr))
-	{
-		//printf("Set Format Failed!\n");
+
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
 	}
 	//
 	hr = m_pBuild->RenderStream(&PIN_CATEGORY_CAPTURE, &MEDIATYPE_Video, m_pCaptureFilter, 
 		m_pSampleGrabberFilter, m_pNullRenderer);
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
+	}
 	//获取控制接口
 	hr = m_pGraph->QueryInterface(IID_IMediaControl, (void**)&m_pMediaControl);
-	if (FAILED(hr))
+	if (FAILED(hr)){
+		err = __LINE__;
 		goto Failed;
-	//
-	
-	//初始化h264编码器.
+	}
+	/*
+			x264 encoder init....
+	*/
 	m_pPicIn = (x264_picture_t*)calloc(1,sizeof(x264_picture_t));
 	m_pPicOut = (x264_picture_t*)calloc(1,sizeof(x264_picture_t));
 
@@ -503,39 +491,44 @@ BOOL CCameraGrab::GrabberInit(int idx,DWORD dwWidth,DWORD dwHeight)
 	x264_param_apply_profile(&param, x264_profile_names[0]);
 
 	m_pEncoder = x264_encoder_open(&param);
-	if (!m_pEncoder)
-	{	
-		//printf("x264 init Failed!\n");
+	if (!m_pEncoder){
+		err = __LINE__;
+		err += '\t';
+		err += "x264 encoder init failed!";
 		goto Failed;
 	}
 	//
 	m_hMutex = CreateEvent(NULL, FALSE, TRUE, NULL);
 	m_hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-	return TRUE;
+	err = "grab init succeeded.";
+	return 0;
 Failed:
 	GrabberTerm();
-	return FALSE;
+	return -1;
 }
 
 BOOL CCameraGrab::GetFrame(char**ppbuffer,DWORD* plen)
 {
 	//printf("Get Frame()\n");
-	char*Buffer = NULL;
-	DWORD dwLen = NULL;
-	RemoveHead(&Buffer, &dwLen);
-	if (Buffer == NULL)
-	{
-		//printf("No Buffer\n");
-		return FALSE;
-	}
-
-	libyuv::ARGBToI420((uint8_t*)Buffer, m_dwWidth * 4, m_pPicIn->img.plane[0], m_pPicIn->img.i_stride[0],
-		m_pPicIn->img.plane[1], m_pPicIn->img.i_stride[1], m_pPicIn->img.plane[2], m_pPicIn->img.i_stride[2],m_dwWidth,m_dwHeight);
+	char*Buffer = nullptr;
+	DWORD dwLen = 0;
 	x264_nal_t*pNal = NULL;
 	int			iNal = 0;
 	int			Size = 0;
+
+	RemoveHead(&Buffer, &dwLen);
+	if (Buffer == nullptr){
+		//printf("No Buffer\n");
+		return FALSE;
+	}
+	//to I420
+	libyuv::ARGBToI420((uint8_t*)Buffer, m_dwWidth * 4, m_pPicIn->img.plane[0], m_pPicIn->img.i_stride[0],
+		m_pPicIn->img.plane[1], m_pPicIn->img.i_stride[1], m_pPicIn->img.plane[2], 
+		m_pPicIn->img.i_stride[2],m_dwWidth,m_dwHeight);
+	
+	
 	Size = x264_encoder_encode(m_pEncoder, &pNal, &iNal, m_pPicIn, m_pPicOut);
-	free(Buffer);
+	delete[] Buffer;
 
 	if (Size < 0)
 		return FALSE;
@@ -543,10 +536,12 @@ BOOL CCameraGrab::GetFrame(char**ppbuffer,DWORD* plen)
 	*plen = Size;
 	return TRUE;
 }
+
 BOOL CCameraGrab::StartGrab()
 {
 	HRESULT hr = 0;
-	if (m_pMediaControl && (hr = m_pMediaControl->Run(), SUCCEEDED(hr)))
+	if (m_pMediaControl &&
+		(hr = m_pMediaControl->Run(), SUCCEEDED(hr)))
 		return TRUE;
 
 	return FALSE;
@@ -554,8 +549,7 @@ BOOL CCameraGrab::StartGrab()
 
 void CCameraGrab::StopGrab()
 {
-	if (m_pMediaControl)
-	{
+	if (m_pMediaControl){
 		m_pMediaControl->Stop();
 	}
 }

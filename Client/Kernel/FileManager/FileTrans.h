@@ -2,7 +2,7 @@
 #ifndef _MINI_FILE_TRANS_SVR
 #define _MINI_FILE_TRANS_SVR
 
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 #define MINIFILETRANS	('M'|('N'<<8)|('F')<<16|('T')<<24)
 
@@ -34,8 +34,10 @@
 /************************************************************************************/
 
 
+class CManager;
+
 class CFileTrans :
-	public CEventHandler
+	public CMsgHandler
 {
 public:
 	struct CMiniFileTransInit
@@ -200,10 +202,10 @@ private:
 private:
 
 	void OnClose();	
-	void OnConnect();
+	void OnOpen();
 
-	void OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer);
+	void OnReadMsg(WORD Msg,DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer){}
 
 	void Clean();
 	//
@@ -229,7 +231,7 @@ private:
 	void OnGetFileDataChunkRpl(DWORD Read, char*Buffer);
 
 public:
-	CFileTrans(CMiniFileTransInit*pInit, DWORD Identity);
+	CFileTrans(CManager*pManager,CMiniFileTransInit*pInit);
 	~CFileTrans();
 };
 

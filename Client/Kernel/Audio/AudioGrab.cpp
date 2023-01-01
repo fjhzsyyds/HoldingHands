@@ -6,8 +6,7 @@ CAudioGrab::CAudioGrab()
 {
 	m_hEvent = NULL;
 	m_hMutex = NULL;
-	m_pListHead = NULL;
-	m_pListTail = NULL;
+	
 	m_hWaveIn = NULL;
 	m_dwBufSize = 0;
 	m_hWorkThread = NULL;
@@ -112,8 +111,7 @@ Failed:
 void CAudioGrab::GrabTerm()
 {
 	//等待线程退出
-	if (m_hWorkThread && m_dwThreadID)
-	{
+	if (m_hWorkThread && m_dwThreadID){
 		PostThreadMessage(m_dwThreadID, WM_QUIT, 0, 0);
 		WaitForSingleObject(m_hWorkThread, INFINITE);
 		CloseHandle(m_hWorkThread);
@@ -121,32 +119,28 @@ void CAudioGrab::GrabTerm()
 	m_hWorkThread = 0;
 	m_dwThreadID = 0;
 	//关闭设备
-	if (m_hWaveIn)
-	{
+	if (m_hWaveIn){
 		waveInClose(m_hWaveIn);
 		m_hWaveIn = NULL;
 	}
 	//
-	if (m_hEvent)
-	{
+	if (m_hEvent){
 		CloseHandle(m_hEvent);
 		m_hEvent = NULL;
 	}
-	if (m_hMutex)
-	{
+	if (m_hMutex){
 		CloseHandle(m_hMutex);
 		m_hMutex = NULL;
 	}
 	//清理缓存
-	while (m_pListHead)
-	{
-		AudioBuffList*pTemp = m_pListHead;
-		m_pListHead = m_pListHead->next;
-		free(pTemp->m_Buffer);
-		free(pTemp);
+
+	while (!m_buffer_list.empty()){
+		auto & buff = m_buffer_list.front();
+		if (buff.first){
+			delete[]buff.first;
+		}
+		m_buffer_list.pop_front();
 	}
-	m_pListHead = NULL;
-	m_pListTail = NULL;
 	//
 	m_dwBufSize = 0;
 	m_Idx = 0;
@@ -183,28 +177,26 @@ BOOL CAudioGrab::GetBuffer(void**ppBuffer, DWORD*pBufLen)
 void  CAudioGrab::RemoveHead(char**ppBuffer, DWORD*pLen)
 {
 	//printf("Remove Head\n");
-	AudioBuffList*pBuf = NULL;
-	*ppBuffer = NULL;
-	*pLen = NULL;
-	while (true)
-	{
+	pair<char*, DWORD> buf(nullptr,0);
+	*ppBuffer = nullptr;
+	*pLen = 0;
+
+	while (true){
 		WaitForSingleObject(m_hMutex, INFINITE);
-		pBuf = m_pListHead;
 
-		if (m_pListHead == m_pListTail)
-			m_pListHead = m_pListTail = NULL;
-		else
-			m_pListHead = m_pListHead->next;
+		if (m_buffer_list.size()){
+			buf = m_buffer_list.front();
+			m_buffer_list.pop_front();
+		}
 
-		if (!pBuf)
+		if (!buf.first)
 			ResetEvent(m_hEvent);
 		else
-			m_dwBufSize -= pBuf->m_dwBuffLen;
+			m_dwBufSize -= buf.second;
 
 		SetEvent(m_hMutex);
 
-		if (!pBuf)
-		{
+		if (!buf.first){
 			//printf("No Buf,Wait ForSingle Object\n");
 			if (WAIT_TIMEOUT == WaitForSingleObject(m_hEvent, 3000))
 			{
@@ -215,34 +207,25 @@ void  CAudioGrab::RemoveHead(char**ppBuffer, DWORD*pLen)
 		else
 			break;
 	}
-	*ppBuffer = pBuf->m_Buffer;
-	*pLen = pBuf->m_dwBuffLen;
-	free(pBuf);
+	*ppBuffer = buf.first;
+	*pLen = buf.second;
+
 }
 void  CAudioGrab::AddTail(char*Buffer, DWORD dwLen)
 {
 	if (m_dwBufSize > 128 * 1024 * 1024)
 		return;
 
-	AudioBuffList*pNewBuf = (AudioBuffList*)malloc(sizeof(AudioBuffList));
-	pNewBuf->next = NULL;
-	pNewBuf->m_Buffer = (char*)malloc(dwLen);
-	pNewBuf->m_dwBuffLen = dwLen;
+	pair<char*, DWORD> buf (new char[dwLen], dwLen);
 
-	memcpy(pNewBuf->m_Buffer, Buffer, dwLen);
+	memcpy(buf.first, Buffer, dwLen);
 
 	WaitForSingleObject(m_hMutex, INFINITE);
 
 	m_dwBufSize += dwLen;
-	if (m_pListHead == NULL)
-	{
-		m_pListHead = m_pListTail = pNewBuf;
-	}
-	else
-	{
-		m_pListTail->next = pNewBuf;
-		m_pListTail = pNewBuf;
-	}
+
+	m_buffer_list.push_back(buf);
+
 	SetEvent(m_hEvent);
 	SetEvent(m_hMutex);
 }

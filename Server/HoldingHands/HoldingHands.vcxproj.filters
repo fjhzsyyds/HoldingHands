@@ -39,9 +39,6 @@
     <ClInclude Include="ClientContext.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="EventHandler.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="IOCPServer.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -135,6 +132,18 @@
     <ClInclude Include="KeybdLogSrv.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Config.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="utils.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="MsgHandler.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="InvalidHandler.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="HoldingHands.cpp">
@@ -150,9 +159,6 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="ClientContext.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="EventHandler.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="IOCPServer.cpp">
@@ -251,6 +257,18 @@
     <ClCompile Include="KeybdLogSrv.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Config.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="utils.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="MsgHandler.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="InvalidHandler.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="HoldingHands.rc">
@@ -259,9 +277,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="res\HoldingHands.rc2">
-      <Filter>资源文件</Filter>
-    </None>
-    <None Include="res\data1.bin">
       <Filter>资源文件</Filter>
     </None>
   </ItemGroup>

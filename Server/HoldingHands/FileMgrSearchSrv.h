@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 #define FILEMGR_SEARCH			('S'|('R'<<8)|('C'<<16)|('H'<<24))
 
@@ -14,20 +14,18 @@
 class CFileMgrSearchDlg;
 
 class CFileMgrSearchSrv :
-	public CEventHandler
+	public CMsgHandler
 {
 private:
 	CFileMgrSearchDlg*	m_pDlg;
 
 public:
 	void OnClose();					//当socket断开的时候调用这个函数
-	void OnConnect();				//当socket连接的时候调用这个函数
+	void OnOpen();				//当socket连接的时候调用这个函数
 	//有数据到达的时候调用这两个函数.
-	void OnReadPartial(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
-	//有数据发送完毕后调用这两个函数
-	void OnWritePartial(WORD Event, DWORD Total, DWORD nWrite, char*Buffer);
-	void OnWriteComplete(WORD Event, DWORD Total, DWORD nWrite, char*Buffer);
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer);
+
 
 
 	void OnFound(char*Buffer);
@@ -36,7 +34,7 @@ public:
 	void Search(WCHAR*szParams);
 	void Stop();
 
-	CFileMgrSearchSrv(DWORD dwIdentity);
+	CFileMgrSearchSrv(CManager*pManager);
 	~CFileMgrSearchSrv();
 };
 

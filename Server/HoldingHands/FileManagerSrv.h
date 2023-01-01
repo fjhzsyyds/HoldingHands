@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 #define FILE_MANAGER	('F'|('M'<<8)|('G')<<16|('R'<<24))
 #define FILE_MGR_CHDIR			0x00a1
@@ -41,19 +41,18 @@
 class CFileManagerDlg;
 
 class CFileManagerSrv :
-	public CEventHandler
+	public CMsgHandler
 {
 public:
 	CFileManagerDlg *m_pDlg;
 
 	void OnClose();					//当socket断开的时候调用这个函数
-	void OnConnect();				//当socket连接的时候调用这个函数
+	void OnOpen();				//当socket连接的时候调用这个函数
+
 	//有数据到达的时候调用这两个函数.
-	void OnReadPartial(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
-	//有数据发送完毕后调用这两个函数
-	void OnWritePartial(WORD Event, DWORD Total, DWORD nWrite, char*Buffer);
-	void OnWriteComplete(WORD Event, DWORD Total, DWORD nWrite, char*Buffer);
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer);
+
 
 
 	void OnChangeDirRet(DWORD dwRead,char*buffer);
@@ -83,7 +82,7 @@ public:
 	void Download(WCHAR*szFileList);
 	void RunFileNormal(WCHAR*szFileList);
 	void RunFileHide(WCHAR*szFileList);
-	CFileManagerSrv(DWORD dwIdentity);
+	CFileManagerSrv(CManager*pManager);
 	~CFileManagerSrv();
 };
 

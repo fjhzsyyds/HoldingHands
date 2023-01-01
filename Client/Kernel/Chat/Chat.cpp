@@ -4,8 +4,8 @@
 #define ID_INPUT                        1001
 
 
-CChat::CChat():
-CEventHandler(CHAT)
+CChat::CChat(CManager*pManager) :
+CMsgHandler(pManager,CHAT)
 {
 	m_hInit = NULL;
 	m_hDlg = NULL;
@@ -22,8 +22,8 @@ CChat::~CChat()
 //假设对话框不可能由client关闭,只能由客户端断开.;
 LRESULT CALLBACK CChat::DlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	WCHAR Msg[8192] = { 0 };
-	WCHAR buffer[4096];
+	TCHAR Msg[8192] = { 0 };
+	TCHAR buffer[4096];
 	HWND hInput;
 	HWND hMsgList;
 	LPCREATESTRUCTW pCreateStruct = NULL;
@@ -43,15 +43,16 @@ LRESULT CALLBACK CChat::DlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 		switch(LOWORD(wParam))
 		{
 		case IDOK:
-			if(pChat)
-			{
+			if(pChat){
 				hInput= GetDlgItem(pChat->m_hDlg, ID_INPUT);
 				hMsgList = GetDlgItem(pChat->m_hDlg, ID_MSGLIST);
 				GetWindowTextW(hInput, buffer, 4095);
-				if(lstrlenW(buffer) == 0)
+
+				if(lstrlen(buffer) == 0)
 					break;
-				SetWindowTextW(hInput, L"");
-				pChat->Send(CHAT_MSG,(char*)buffer,sizeof(WCHAR)*(lstrlenW(buffer) + 1));
+
+				SetWindowText(hInput, TEXT(""));
+				pChat->SendMsg(CHAT_MSG,(char*)buffer,sizeof(TCHAR)*(lstrlenW(buffer) + 1));
 
 				//把自己发送的内容显示到屏幕上;
 				lstrcatW(Msg, L"[me]:");
@@ -99,12 +100,15 @@ void CChat::ThreadProc(CChat*pChat)
 		//hide window
 		
 		//Create Button
-		CreateWindowW(L"button",L"Send",WS_CHILD|WS_VISIBLE,rect.right - 60,rect.bottom - 24,60,24,pChat->m_hDlg,(HMENU)IDOK,hInstance,0);
+		CreateWindowW(L"button",L"Send",WS_CHILD|WS_VISIBLE,rect.right - 60,
+			rect.bottom - 24,60,24,pChat->m_hDlg,(HMENU)IDOK,hInstance,0);
 		//Create MsgList
-		CreateWindowW(L"Edit",L"",WS_CHILD|WS_VISIBLE|ES_MULTILINE|ES_READONLY | ES_AUTOHSCROLL | 
-                    WS_VSCROLL,0,0,rect.right,rect.bottom - 24,pChat->m_hDlg,(HMENU)ID_MSGLIST,hInstance,NULL);
+		CreateWindowW(L"Edit",L"",WS_CHILD|WS_VISIBLE|ES_MULTILINE|ES_READONLY 
+			| ES_AUTOHSCROLL | WS_VSCROLL,0,0,rect.right,rect.bottom - 24,
+			pChat->m_hDlg,(HMENU)ID_MSGLIST,hInstance,NULL);
 		//Create Input Box
-		CreateWindowW(L"Edit",L"",WS_CHILD|WS_VISIBLE|WS_BORDER|ES_AUTOHSCROLL,0,rect.bottom - 24,rect.right - 60,24,pChat->m_hDlg,(HMENU)ID_INPUT,hInstance,0);
+		CreateWindowW(L"Edit",L"",WS_CHILD|WS_VISIBLE|WS_BORDER|ES_AUTOHSCROLL,
+			0,rect.bottom - 24,rect.right - 60,24,pChat->m_hDlg,(HMENU)ID_INPUT,hInstance,0);
 	}
 	//
 	//enable(false) send button
@@ -115,8 +119,8 @@ void CChat::ThreadProc(CChat*pChat)
 	MSG msg = { 0 };
 
 	while (GetMessage(&msg, 0, 0, 0)){
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
 	}
 	//退出了.;
 	DestroyWindow(pChat->m_hDlg);
@@ -130,7 +134,9 @@ BOOL CChat::ChatInit()
 	if (m_hInit == NULL)
 		return FALSE;
 	//创建线程;
-	m_hWndThread = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThreadProc, this, 0, &m_dwThreadId);
+	m_hWndThread = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)
+		ThreadProc, this, 0, &m_dwThreadId);
+
 	if (m_hWndThread == 0){
 		return FALSE;
 	}
@@ -143,13 +149,13 @@ BOOL CChat::ChatInit()
 	//
 	return TRUE;
 }
-void CChat::OnConnect()
+void CChat::OnOpen()
 {
 	DWORD dwStatu = 0;
 	if (ChatInit()){
 		dwStatu = 1;
 	}
-	Send(CHAT_INIT, (char*)&dwStatu, sizeof(dwStatu));
+	SendMsg(CHAT_INIT, (char*)&dwStatu, sizeof(dwStatu));
 }
 void CChat::OnClose()
 {
@@ -163,13 +169,11 @@ void CChat::OnClose()
 		m_hWndThread = NULL;
 		m_dwThreadId = NULL;
 	}
-	if (m_hDlg)
-	{
+	if (m_hDlg){
 		DestroyWindow(m_hDlg);
 		m_hDlg = NULL;
 	}
-	if (m_hInit)
-	{
+	if (m_hInit){
 		CloseHandle(m_hInit);
 		m_hInit = NULL;
 	}
@@ -178,15 +182,15 @@ void CChat::OnClose()
 void CChat::OnChatBegin(DWORD dwRead, char*szBuffer)
 {
 	if (dwRead == 0 || !szBuffer[0]){
-		lstrcpyW(m_szPeerName, L"Hacker");
+		lstrcpy(m_szPeerName, L"Hacker");
 	}
 	else{
-		lstrcpyW(m_szPeerName, (WCHAR*)szBuffer);
+		lstrcpy(m_szPeerName, (TCHAR*)szBuffer);
 	}
 	if (m_hDlg){
-		WCHAR Title[256] = {0};
-		lstrcpyW(Title,L"Chating with ");
-		lstrcatW(Title,m_szPeerName);
+		TCHAR Title[256] = {0};
+		lstrcpy(Title,L"Chating with ");
+		lstrcat(Title,m_szPeerName);
 		SetWindowTextW(m_hDlg,Title);
 		//Show dlg
 		ShowWindow(m_hDlg, SW_SHOW);
@@ -198,7 +202,7 @@ void CChat::OnChatBegin(DWORD dwRead, char*szBuffer)
 
 void CChat::OnChatMsg(DWORD dwRead, char*szBuffer)
 {
-	WCHAR Msg[8192] = { 0 };
+	TCHAR Msg[8192] = { 0 };
 	//显示到对话框里面;
 	if (m_hDlg){
 		HWND hCtrl = GetDlgItem(m_hDlg, ID_MSGLIST);
@@ -206,29 +210,23 @@ void CChat::OnChatMsg(DWORD dwRead, char*szBuffer)
 		Msg[0] = '[';
 		lstrcatW(Msg, m_szPeerName);
 		lstrcatW(Msg, L"]:");
-		lstrcatW(Msg, (WCHAR*)szBuffer);
+		lstrcatW(Msg, (TCHAR*)szBuffer);
 		lstrcatW(Msg,L"\r\n");
 		SendMessageW(hCtrl, EM_SETSEL, -1, 0);
 		SendMessageW(hCtrl, EM_REPLACESEL, FALSE, (LPARAM)Msg);
 	}
 }
-void CChat::OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer)
+void CChat::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
-	switch (Event)
+	switch (Msg)
 	{
 	case CHAT_BEGIN:
-		OnChatBegin(Read,Buffer);
+		OnChatBegin(dwSize, Buffer);
 		break;
 	case CHAT_MSG:
-		OnChatMsg(Read, Buffer);
+		OnChatMsg(dwSize, Buffer);
 		break;
 	default:
 		break;
 	}
-}
-
-void CChat::OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer)
-{
-
-
 }

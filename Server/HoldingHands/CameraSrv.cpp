@@ -1,9 +1,10 @@
 #include "stdafx.h"
 #include "CameraSrv.h"
 #include "CameraDlg.h"
+#include "json\json.h"
 
-CCameraSrv::CCameraSrv(DWORD dwIdentity) :
-CEventHandler(dwIdentity)
+CCameraSrv::CCameraSrv(CManager*pManager) :
+	CMsgHandler(pManager)
 {
 	m_pDlg = NULL;
 	
@@ -36,28 +37,39 @@ void CCameraSrv::OnClose()
 	}
 	CameraTerm();
 }
-void CCameraSrv::OnConnect()
+void CCameraSrv::OnOpen()
 {
 	m_pDlg = new CCameraDlg(this);
 	if (FALSE == m_pDlg->Create(IDD_CAM_DLG,CWnd::GetDesktopWindow())){
-		Disconnect();
+		Close();
 		return;
 	}
 
 	m_pDlg->ShowWindow(SW_SHOW);
 }
-void CCameraSrv::OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Buffer)
+void CCameraSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
-	switch (Event)
+	switch (Msg)
 	{
 	case CAMERA_DEVICELIST:
 		OnDeviceList(Buffer);
 		break;
 	case CAMERA_VIDEOSIZE:
-		OnVideoSize((DWORD*)Buffer);
+		do{
+			Json::Value res;
+			if (Json::Reader().parse(Buffer, res)){
+				int code = res["code"].asInt();
+				string err = res["err"].asString();
+				int width = res["width"].asInt();
+				int height = res["height"].asInt();
+
+				OnVideoSize(code, err, width, height);
+			}
+		} while (0); 
+		//OnVideoSize((DWORD*)Buffer);
 		break;
 	case CAMERA_FRAME:
-		OnFrame(Buffer,dwRead);
+		OnFrame(Buffer, dwSize);
 		break;
 	case CAMERA_SCREENSHOT:
 		OnScreenShot();
@@ -78,36 +90,44 @@ void CCameraSrv::OnDeviceList(char*DeviceList)
 	m_pDlg->SendMessage(WM_CAMERA_DEVICELIST, (WPARAM)DeviceList, NULL);
 }
 
-void CCameraSrv::Start(int idx, DWORD dwWidth, DWORD dwHeight)
+void CCameraSrv::Start(const string& device, int format, int bitcount,int width, int height)
 {
 	CameraTerm();
-	DWORD dwParams[3] = { idx, dwWidth, dwHeight };
-	Send(CAMERA_START, (char*)&dwParams, sizeof(dwParams));
+	//
+	Json::Value res;
+	string data;
+	res["device"] = device;
+	res["format"] = format;
+	res["width"] = width;
+	res["height"] = height;
+	res["bit"] = bitcount;
+	data = Json::FastWriter().write(res);
+
+	SendMsg(CAMERA_START, (char*)data.c_str(), data.length() + 1);
 }
+
 void CCameraSrv::Stop()
 {
-	Send(CAMERA_STOP, 0, 0);
+	SendMsg(CAMERA_STOP, 0, 0);
 }
 
 void CCameraSrv::OnStopOk()
 {
-	//清理资源
 	CameraTerm();
-	//通知窗口
 	m_pDlg->SendMessage(WM_CAMERA_STOP_OK, 0, 0);
 }
-BOOL CCameraSrv::CameraInit(DWORD dwHeight,DWORD dwWidth)
+int CCameraSrv::CameraInit(int width, int height)
 {
 	CameraTerm();
 	BITMAPINFO bmi = { 0 };
-	CDC*pDc = m_pDlg->GetDC();
 	//创建内存dc
-	m_hMemDC = CreateCompatibleDC(pDc->GetSafeHdc());
+	m_hMemDC = CreateCompatibleDC(m_pDlg->m_hdc);
 	if (m_hMemDC == NULL)
 		goto Failed;
+
 	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-	bmi.bmiHeader.biWidth = dwWidth;
-	bmi.bmiHeader.biHeight = dwHeight;
+	bmi.bmiHeader.biWidth = width;
+	bmi.bmiHeader.biHeight = height;
 	bmi.bmiHeader.biPlanes = 1;
 	bmi.bmiHeader.biBitCount = 32;				//4字节貌似解码快
 	bmi.bmiHeader.biCompression = BI_RGB;
@@ -130,20 +150,18 @@ BOOL CCameraSrv::CameraInit(DWORD dwHeight,DWORD dwWidth)
 	//
 	if (0 != avcodec_open2(m_pCodecContext, m_pCodec, 0))
 		goto Failed;
-	return TRUE;
+	return 0;
 Failed:
 	CameraTerm();
-	return FALSE;
+	return -1;
 }
 void CCameraSrv::CameraTerm()
 {
-	if (m_hMemDC)
-	{
+	if (m_hMemDC){
 		DeleteDC(m_hMemDC);
 		m_hMemDC = NULL;
 	}
-	if (m_hBmp)
-	{
+	if (m_hBmp){
 		DeleteObject(m_hBmp);
 		memset(&m_Bmp, 0, sizeof(m_Bmp));
 		m_hBmp = NULL;
@@ -161,26 +179,22 @@ void CCameraSrv::CameraTerm()
 	memset(&m_AVFrame, 0, sizeof(m_AVFrame));
 }
 
-void CCameraSrv::OnVideoSize(DWORD dwVideoSize[])
-{
-	if (!dwVideoSize[0])
-	{
-		m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)L"Grabber Init Failed!", NULL);
+void CCameraSrv::OnVideoSize(int code, string&err, int width, int height){
+	if (code){
+		m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)err.c_str(), NULL);
 		return;
 	}
-	if (FALSE == CameraInit(dwVideoSize[2], dwVideoSize[1]))
-	{
-		m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)L"CameraSrv Init Failed!", NULL);
+	if (CameraInit(width, height)){
+		m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)"CameraSrv Init Failed!", NULL);
 		return;
 	}
-	m_pDlg->SendMessage(WM_CAMERA_VIDEOSIZE, dwVideoSize[1], dwVideoSize[2]);
-	//Send(CAMERA_GETFRAME, 0, 0);
+
+	m_pDlg->SendMessage(WM_CAMERA_VIDEOSIZE, width, height);
 }
 
 void CCameraSrv::OnFrame(char*buffer,DWORD dwLen)
 {
-	if (m_pCodecContext == NULL)
-	{
+	if (m_pCodecContext == NULL){
 		//解码器还没有创建,丢弃,
 		return;
 	}
@@ -189,11 +203,9 @@ void CCameraSrv::OnFrame(char*buffer,DWORD dwLen)
 	m_AVPacket.data = (uint8_t*)buffer;
 	m_AVPacket.size = dwLen;
 
-	//Send(CAMERA_GETFRAME, 0, 0);
-	if (!avcodec_send_packet(m_pCodecContext, &m_AVPacket))
-	{
-		if (!avcodec_receive_frame(m_pCodecContext, &m_AVFrame))
-		{
+	//SendMsg(CAMERA_GETFRAME, 0, 0);
+	if (!avcodec_send_packet(m_pCodecContext, &m_AVPacket)){
+		if (!avcodec_receive_frame(m_pCodecContext, &m_AVFrame)){
 			//成功.
 			//I420 ---> ARGB.
 			libyuv::I420ToARGB(m_AVFrame.data[0], m_AVFrame.linesize[0], m_AVFrame.data[1], m_AVFrame.linesize[1],
@@ -204,13 +216,13 @@ void CCameraSrv::OnFrame(char*buffer,DWORD dwLen)
 			return;
 		}
 	}
-	m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)L"Decode Frame Failed!", NULL);
+	m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)"Decode Frame Failed!", NULL);
 	return;
 }
 
 void CCameraSrv::ScreenShot()
 {
-	Send(CAMERA_SCREENSHOT, 0, 0);
+	SendMsg(CAMERA_SCREENSHOT, 0, 0);
 }
 
 void CCameraSrv::OnScreenShot()

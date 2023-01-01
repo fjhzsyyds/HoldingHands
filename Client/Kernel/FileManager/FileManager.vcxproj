@@ -17,7 +17,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v120</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
@@ -41,17 +41,19 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>D:\RAT\Client\Kernel\Common;$(IncludePath)</IncludePath>
-    <SourcePath>D:\RAT\Client\Kernel\Common;$(SourcePath)</SourcePath>
-    <OutDir>D:\RAT\HoldingHands\Release\modules</OutDir>
+    <IncludePath>..\Common;$(IncludePath)</IncludePath>
+    <SourcePath>..\Common;$(SourcePath)</SourcePath>
+    <OutDir>..\Debug</OutDir>
     <TargetName>FileMgr</TargetName>
+    <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);..\Common</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>D:\RAT\Client\Kernel\Common;$(IncludePath)</IncludePath>
-    <SourcePath>D:\RAT\Client\Kernel\Common;$(SourcePath)</SourcePath>
-    <OutDir>..\..\..\HoldingHands\release\modules</OutDir>
+    <IncludePath>..\Common;$(IncludePath)</IncludePath>
+    <SourcePath>..\Common;$(SourcePath)</SourcePath>
+    <OutDir>..\..\..\server\modules</OutDir>
     <TargetName>filemgr</TargetName>
+    <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);..\Common</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -63,8 +65,9 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>libcmt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -86,9 +89,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\Common\EventHandler.cpp" />
     <ClCompile Include="..\Common\IOCPClient.cpp" />
+    <ClCompile Include="..\Common\Manager.cpp" />
+    <ClCompile Include="..\Common\MsgHandler.cpp" />
     <ClCompile Include="..\Common\Packet.cpp" />
+    <ClCompile Include="..\Common\utils.cpp" />
     <ClCompile Include="FileDownloader.cpp" />
     <ClCompile Include="FileManager.cpp" />
     <ClCompile Include="FileMgrSearch.cpp" />

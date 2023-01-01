@@ -3,7 +3,7 @@
 #include "Packet.h"
 #include "Manager.h"
 #include "ClientContext.h"
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 //初始化为NULL
 CIOCPServer*	CIOCPServer::hInstance = NULL;
@@ -20,15 +20,13 @@ CIOCPServer* CIOCPServer::CreateServer(HWND hNotifyWnd)
 
 void CIOCPServer::DeleteServer()
 {
-	if (hInstance)
-	{
+	if (hInstance){
 		delete hInstance;
 		hInstance = NULL;
 	}
 }
 
-CIOCPServer::CIOCPServer(HWND hWnd):
-m_Log("Server.log",std::ios::app)
+CIOCPServer::CIOCPServer(HWND hWnd)
 {
 	m_hNotifyWnd = hWnd;
 	//Listen Socket
@@ -47,9 +45,10 @@ m_Log("Server.log",std::ios::app)
 	m_hStopRunning = CreateEvent(0, TRUE, TRUE, NULL);			//初始状态是TRUE,已经停止
 	//Event Dispatch
 	m_pManager = new CManager(this);
+	m_pManager->m_pServer = this;
+
 
 	m_pThreadList = new CMapPtrToPtr;
-	
 	m_BusyCount = 0;
 	m_MaxConcurrent = 0;
 	m_MaxThreadCount = 0;
@@ -68,8 +67,7 @@ CIOCPServer::~CIOCPServer()
 	StopServer();
 	//release resource
 	//Release context:
-	if (m_pClientContextList)
-	{
+	if (m_pClientContextList){
 		while (m_pClientContextList->GetCount() > 0)
 			delete (CClientContext*)m_pClientContextList->RemoveHead();
 		delete m_pClientContextList;
@@ -77,8 +75,7 @@ CIOCPServer::~CIOCPServer()
 	}
 	m_pClientContextList = NULL;
 
-	if (m_pFreeContextList)
-	{
+	if (m_pFreeContextList){
 		while (m_pFreeContextList->GetCount() > 0)
 			delete (CClientContext*)m_pFreeContextList->RemoveHead();
 		delete m_pFreeContextList;
@@ -89,21 +86,18 @@ CIOCPServer::~CIOCPServer()
 	DeleteCriticalSection(&m_csContext);
 
 	//
-	if (m_pThreadList)
-	{
+	if (m_pThreadList){
 		delete m_pThreadList;
 		m_pThreadList = NULL;
 	}
 	DeleteCriticalSection(&m_csThread);
 	//
-	if (m_pManager)
-	{
+	if (m_pManager){
 		delete m_pManager;
 		m_pManager = NULL;
 	}
 	//
-	if (m_hStopRunning)
-	{
+	if (m_hStopRunning){
 		CloseHandle(m_hStopRunning);
 		m_hStopRunning = NULL;
 	}
@@ -316,105 +310,21 @@ void CIOCPServer::HandlerIOMsg(CClientContext*pClientContext, DWORD nTransferred
 		OnAcceptComplete(dwFailedReason);
 		break;
 	case IO_WRITE:
-		OnWriteComplete(pClientContext, nTransferredBytes, dwFailedReason);
+		pClientContext->OnWriteComplete(nTransferredBytes, dwFailedReason);
 		break;
 	case IO_READ:
-		OnReadComplete(pClientContext, nTransferredBytes, dwFailedReason);
+		pClientContext->OnReadComplete(nTransferredBytes, dwFailedReason);
 		break;
 	case IO_CLOSE:
-		OnClose(pClientContext);
+		pClientContext->OnClose();
+		InterlockedDecrement(&m_AssociateClientCount);
+		FreeContext(pClientContext);
 		break;
 	}
 }
 
 
 
-void CIOCPServer::OnWriteComplete(CClientContext*pClientContext, DWORD nTransferredBytes, DWORD dwFailedReason)
-{
-	//发送成功
-	if (!dwFailedReason)
-	{
-		pClientContext->m_dwWrite += nTransferredBytes;
-		//发送完成了.
-		if (pClientContext->m_dwWrite == pClientContext->m_WritePacket.GetBodyLen() + PACKET_HEADER_LEN)
-		{
-			//处理完事件后清理
-			m_pManager->ProcessCompletedPacket(PACKET_WRITE_COMPLETED, pClientContext, &pClientContext->m_WritePacket);
-		}
-		else if (pClientContext->m_dwWrite<pClientContext->m_WritePacket.GetBodyLen() + PACKET_HEADER_LEN)
-		{
-			//只发送了一部分
-			if (pClientContext->m_dwWrite > PACKET_HEADER_LEN){
-				m_pManager->ProcessCompletedPacket(PACKET_WRITE_PARTIAL, pClientContext, &pClientContext->m_WritePacket);
-			}
-			pClientContext->m_wsaWriteBuf.buf = pClientContext->m_WritePacket.GetBuffer() + pClientContext->m_dwWrite;
-			pClientContext->m_wsaWriteBuf.len = pClientContext->m_WritePacket.GetBodyLen() + PACKET_HEADER_LEN - pClientContext->m_dwWrite;
-			//继续发送数据
-			PostWrite(pClientContext);
-			return;
-		}
-	}
-	pClientContext->m_wsaWriteBuf.buf = 0;
-	pClientContext->m_wsaWriteBuf.len = 0;
-	pClientContext->m_dwWrite = 0;
-	SetEvent(pClientContext->m_SendPacketOver);
-}
-//---------------------------------------------Read---------------------------------------------------------
-//ReadIO请求完成
-void CIOCPServer::OnReadComplete(CClientContext*pClientContext, DWORD nTransferredBytes, DWORD dwFailedReason)
-{
-	if (dwFailedReason){
-		pClientContext->m_dwRead = 0;
-		pClientContext->m_wsaReadBuf.buf = 0;
-		pClientContext->m_wsaReadBuf.len = 0;
-		//直接返回,不Post下一个Read
-		return;
-	}
-
-	//成功,有数据到达：
-	pClientContext->m_dwRead += nTransferredBytes;
-	//读取完毕
-	if (pClientContext->m_dwRead >= PACKET_HEADER_LEN
-		&& (pClientContext->m_dwRead == PACKET_HEADER_LEN + pClientContext->m_ReadPacket.GetBodyLen()))
-	{
-		//同步操作
-		m_pManager->ProcessCompletedPacket(PACKET_READ_COMPLETED, pClientContext, &pClientContext->m_ReadPacket);
-		//继续读取下一个Packet
-		pClientContext->m_dwRead = 0;
-	}
-	//先把PacketHeader接收完
-	if (pClientContext->m_dwRead < PACKET_HEADER_LEN){
-		pClientContext->m_wsaReadBuf.buf = pClientContext->m_ReadPacket.GetBuffer() + pClientContext->m_dwRead;
-		pClientContext->m_wsaReadBuf.len = PACKET_HEADER_LEN - pClientContext->m_dwRead;
-	}
-	else
-	{
-		BOOL bOk = pClientContext->m_ReadPacket.Verify();
-		BOOL bMemEnough = FALSE;
-		//为空，先分配相应内存,在这之前先校验头部是否正确
-		if (bOk){
-			DWORD dwBodyLen = pClientContext->m_ReadPacket.GetBodyLen();
-			bMemEnough = pClientContext->m_ReadPacket.AllocateMem(dwBodyLen);
-		}
-		if (bOk && (pClientContext->m_dwRead - PACKET_HEADER_LEN>0)){
-			//通知接收了一部分
-			m_pManager->ProcessCompletedPacket(PACKET_READ_PARTIAL, pClientContext, &pClientContext->m_ReadPacket);
-		}
-		//如果bOk且，内存分配成功，最后会重新赋值，否则下一次Post会断开这个客户的连接
-		pClientContext->m_wsaReadBuf.buf = NULL;
-		pClientContext->m_wsaReadBuf.len = 0;			
-		//内存可能分配失败
-		if (bOk && bMemEnough)
-		{
-			//设置偏移
-			pClientContext->m_wsaReadBuf.buf = pClientContext->m_ReadPacket.GetBuffer() + pClientContext->m_dwRead;
-			//计算剩余长度
-			pClientContext->m_wsaReadBuf.len = pClientContext->m_ReadPacket.GetBodyLen() + PACKET_HEADER_LEN - pClientContext->m_dwRead;
-		}
-	}
-	//投递下一个请求
-	PostRead(pClientContext);
-}
 //投递一个ReadIO请求
 void CIOCPServer::PostRead(CClientContext*pClientContext)
 {
@@ -447,7 +357,8 @@ void CIOCPServer::PostWrite(CClientContext*pClientContext)
 	OVERLAPPEDPLUS*pOverlapped = new OVERLAPPEDPLUS(IO_WRITE);
 	//assert(pClientContext->m_ClientSocket == INVALID_SOCKET);
 	EnterCriticalSection(&pClientContext->m_csCheck);
-	nIORet = WSASend(pClientContext->m_ClientSocket, &pClientContext->m_wsaWriteBuf, 1, &nWriteBytes, flag, (LPOVERLAPPED)pOverlapped, NULL);
+	nIORet = WSASend(pClientContext->m_ClientSocket, &pClientContext->m_wsaWriteBuf, 1, 
+		&nWriteBytes, flag, (LPOVERLAPPED)pOverlapped, NULL);
 	nErrorCode = WSAGetLastError();
 	//IO错误,该SOCKET被关闭了,或者buff为NULL;
 	if (nIORet == SOCKET_ERROR	&& nErrorCode != WSA_IO_PENDING){
@@ -471,13 +382,13 @@ void CIOCPServer::OnAcceptComplete(DWORD dwFailedReason)
 	//绑定端口
 
 	if (!dwFailedReason){
-		hRet = CreateIoCompletionPort((HANDLE)pClientContext->m_ClientSocket, m_hCompletionPort, (ULONG_PTR)pClientContext, NULL);
+		hRet = CreateIoCompletionPort((HANDLE)pClientContext->m_ClientSocket,
+			m_hCompletionPort, (ULONG_PTR)pClientContext, NULL);
 	}
 	if (!dwFailedReason && hRet == m_hCompletionPort)
 	{
 		//进到这里说明这个接收成功了而且成功的绑定了完成端口
 		AddToList(pClientContext);
-
 		InterlockedIncrement(&m_AssociateClientCount);
 		//update context:
 		setsockopt(pClientContext->m_ClientSocket, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
@@ -513,12 +424,11 @@ void CIOCPServer::OnAcceptComplete(DWORD dwFailedReason)
 			in_keep_alive.keepalivetime = 40000;			/* 40s 没有报文开始发送keepalive心跳包-单位为毫秒*/
 
 			WSAIoctl(pClientContext->m_ClientSocket, SIO_KEEPALIVE_VALS, (LPVOID)&in_keep_alive, ul_in_len,
-
 				(LPVOID)&out_keep_alive, ul_out_len, &ul_bytes_return, NULL, NULL);
 		}
 		//
 		//-----------------------------------------------------------------------------------------
-		m_pManager->ProcessCompletedPacket(PACKET_CLIENT_CONNECT, pClientContext, NULL);
+		pClientContext->OnConnect();
 		//-----------------------------------------------------------------------------------------
 		//先接收数据包的Header
 		pClientContext->m_dwRead = 0;
@@ -526,7 +436,6 @@ void CIOCPServer::OnAcceptComplete(DWORD dwFailedReason)
 		pClientContext->m_wsaReadBuf.len = PACKET_HEADER_LEN;
 		//Post first read,then the socket will continuously process the read completion statu.;
 		PostRead(pClientContext);
-
 		//Accept next client
 		PostAccept();
 		return;
@@ -539,8 +448,6 @@ void CIOCPServer::OnAcceptComplete(DWORD dwFailedReason)
 	FreeContext(pClientContext);
 	//如果接受到一个socket ,但是对方没有发送数据而是直接断开，这里也会失败.
 	//必须要接收到4 个字节的 identity才会成功.
-
-	//
 	if ((dwFailedReason & _FLAG_IO_ABORTED) || (dwFailedReason & _FLAG_MANUAL_POST)){
 		//终止accept
 		SetEvent(m_hStopRunning);
@@ -587,22 +494,19 @@ BOOL CIOCPServer::SocketInit()
 	DWORD			dwBytes;
 	SOCKET			temp;
 	//初始化WinSock
-	if (SOCKET_ERROR == WSAStartup(RequestedVersion, &wsadata))
-	{
+	if (SOCKET_ERROR == WSAStartup(RequestedVersion, &wsadata)){
 		wprintf(L"WSAStartup failed with error: %u\n", WSAGetLastError());
 		return FALSE;
 	}
 	iResult = INVALID_SOCKET;
 	//获取AcceptEx函数指针
 	temp = socket(AF_INET,SOCK_STREAM,NULL);
-	if (temp != INVALID_SOCKET)
-	{
+	if (temp != INVALID_SOCKET){
 		iResult = WSAIoctl(temp, SIO_GET_EXTENSION_FUNCTION_POINTER, &GuidAcceptEx, sizeof(GuidAcceptEx),
 			&lpfnAcceptEx, sizeof(lpfnAcceptEx), &dwBytes, NULL, NULL);
 		closesocket(temp);
 	}
-	if (iResult == SOCKET_ERROR) 
-	{
+	if (iResult == SOCKET_ERROR) {
 		wprintf(L"WSAIoctl failed with error: %u\n", WSAGetLastError());
 		WSACleanup();
 		return FALSE;
@@ -648,9 +552,10 @@ BOOL CIOCPServer::StartServer(USHORT uPort)
 	GetSystemInfo(&si);
 	//最大并发数本机12个cpu ,24
 	int MaxConcurrent = si.dwNumberOfProcessors * 2;
-
+	MaxConcurrent = 1;
 	//Create completion port
-	m_hCompletionPort = CreateIoCompletionPort((HANDLE)m_ListenSocket, NULL, (ULONG_PTR)m_ListenSocket, MaxConcurrent);
+	m_hCompletionPort = CreateIoCompletionPort((HANDLE)m_ListenSocket, NULL, 
+		(ULONG_PTR)m_ListenSocket, MaxConcurrent);
 	if (NULL == m_hCompletionPort)
 		goto Error;
 
@@ -659,7 +564,6 @@ BOOL CIOCPServer::StartServer(USHORT uPort)
 	m_MaxConcurrent = MaxConcurrent;
 	m_MaxThreadCount = m_MaxConcurrent + 4;//最大线程数量设置为最大并发数量加4;
 	//
-	m_Log << "Start Server - m_MaxThreadCount:"<<m_MaxThreadCount<<'\t'<<"m_MaxConcurrent:"<<m_MaxConcurrent<<'\n';
 	//-------------------------------------------------------------------------------------------------------------
 	//Create Threads;
 	for (i = 0; i < MaxConcurrent; i++){
@@ -749,16 +653,6 @@ void CIOCPServer::StopServer()
 
 }
 
-void CIOCPServer::OnClose(CClientContext*pClientContext)
-{
-	//等待数据包发送完毕.
-	WaitForSingleObject(pClientContext->m_SendPacketOver,INFINITE);
-	//
-	m_pManager->ProcessCompletedPacket(PACKET_CLIENT_DISCONNECT, pClientContext, 0);
-	//之后不再有这个client 的IO消息
-	InterlockedDecrement(&m_AssociateClientCount);
-	FreeContext(pClientContext);
-}
 
 CClientContext* CIOCPServer::AllocateContext(SOCKET ClientSocket)
 {
@@ -776,13 +670,12 @@ CClientContext* CIOCPServer::AllocateContext(SOCKET ClientSocket)
 	LeaveCriticalSection(&m_csContext);
 
 	if (pClientContext == NULL){
-		pClientContext = new CClientContext(ClientSocket,this);
+		pClientContext = new CClientContext(ClientSocket,this,m_pManager);
 	}
 	return pClientContext;
 }
 
-void CIOCPServer::FreeContext(CClientContext*pContext)
-{
+void CIOCPServer::FreeContext(CClientContext*pContext){
 	//善后清理
 	SetEvent(pContext->m_SendPacketOver);			//重新将事件置为触发状态。
 	//
@@ -803,13 +696,6 @@ void CIOCPServer::FreeContext(CClientContext*pContext)
 	pContext->m_wsaWriteBuf.len = 0;
 	pContext->m_dwWrite = 0;
 	//
-	ASSERT(pContext->m_pHandler == NULL);
-
-	//if (pContext->m_pHandler){
-	//	//一般不会发生.
-	//	delete pContext->m_pHandler;
-	//	pContext->m_pHandler = NULL;
-	//}
 
 	pContext->m_Identity = 0;
 	pContext->m_szPeerAddr[0] = 0;
@@ -840,14 +726,15 @@ void CIOCPServer::async_svr_ctrl_proc(DWORD dwParam)
 	}	
 }
 
-void CIOCPServer::AsyncStopSvr()
+void CIOCPServer::AsyncStopSrv()
 {
 	HANDLE hThread = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)async_svr_ctrl_proc, 0, 0, 0);
 	if (hThread){
 		CloseHandle(hThread);
 	}
 }
-void CIOCPServer::AsyncStartSvr(USHORT Port)
+
+void CIOCPServer::AsyncStartSrv(USHORT Port)
 {
 	HANDLE hThread = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)async_svr_ctrl_proc,(void*)(0x00010000 | Port), 0, 0);
 	if (hThread){

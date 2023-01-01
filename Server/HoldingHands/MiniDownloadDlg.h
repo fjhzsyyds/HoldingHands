@@ -3,6 +3,9 @@
 #include "resource.h"
 #define WM_MNDD_FILEINFO			(WM_USER+701)
 #define WM_MNDD_DOWNLOAD_RESULT		(WM_USER+702)
+
+#define WM_MNDD_ERROR				(WM_USER + 703)
+
 // CMiniDownloadDlg ¶Ô»°¿ò
 
 class CMiniDownloadSrv;
@@ -26,12 +29,12 @@ public:
 	afx_msg void OnBnClickedOk();
 	CProgressCtrl		m_Progress;
 	CMiniDownloadSrv*	m_pHandler;
-	ULONGLONG			m_ullTotalSize;
-	ULONGLONG			m_ullFinishedSize;
+
 	CString				m_IP;
 
 	afx_msg LRESULT OnFileInfo(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnDownloadParital(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnDownloadResult(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnError(WPARAM wParam, LPARAM lParma);
 	afx_msg void OnClose();
 	virtual BOOL OnInitDialog();
 };

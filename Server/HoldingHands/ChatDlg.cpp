@@ -43,7 +43,7 @@ void CChatDlg::OnClose()
 {
 	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	if (m_pHandler){
-		m_pHandler->Disconnect();
+		m_pHandler->Close();
 		m_pHandler = NULL;
 	}
 }
@@ -56,7 +56,7 @@ void CChatDlg::OnBnClickedOk()
 		return;
 	if (m_pHandler)
 	{
-		m_pHandler->SendMsg(m_Msg.GetBuffer());
+		m_pHandler->SendMsgMsg(m_Msg.GetBuffer());
 		//把自己的消息显示到屏幕上.
 		CString MyMsg;
 		MyMsg.Format(L"[me]:%s\r\n", m_Msg.GetBuffer());
@@ -74,13 +74,11 @@ BOOL CChatDlg::OnInitDialog()
 	CDialogEx::OnInitDialog();
 
 	// TODO:  在此添加额外的初始化
-	char szIP[128] = { 0 };
-	USHORT uPort = 0;
 	ASSERT(m_pHandler != NULL);
-	m_pHandler->GetPeerName(szIP, uPort);
+	auto const peer = m_pHandler->GetPeerName();
 
 	CString Title;
-	Title.Format(L"[%s] Chat ",CA2W(szIP).m_szBuffer);
+	Title.Format(L"[%s] Chat ", CA2W(peer.first.c_str()).m_psz);
 	SetWindowText(Title);
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常:  OCX 属性页应返回 FALSE

@@ -3,8 +3,8 @@
 #include "MiniFileTransDlg.h"
 #include "resource.h"
 
-CMiniFileTransSrv::CMiniFileTransSrv(DWORD Identity) :
-CEventHandler(Identity)
+CMiniFileTransSrv::CMiniFileTransSrv(CManager*pManager) :
+	CMsgHandler(pManager)
 {
 	memset(m_Path, 0, sizeof(m_Path));
 	m_dwCurFileIdentity = 0;
@@ -41,12 +41,12 @@ void CMiniFileTransSrv::OnClose()
 	}
 }
 
-void CMiniFileTransSrv::OnConnect()
+void CMiniFileTransSrv::OnOpen()
 {
 	m_pDlg = new CMiniFileTransDlg(this);
 	if (FALSE == m_pDlg->Create(IDD_FILETRANS,CWnd::GetDesktopWindow()))
 	{
-		Disconnect();
+		Close();
 		return;
 	}
 	m_pDlg->ShowWindow(SW_SHOW);
@@ -71,62 +71,55 @@ void CMiniFileTransSrv::OnMINIInit(DWORD Read, char*Buffer)
 			*pPath = NULL;
 			//保存Dest路径.
 			lstrcpyW(m_Path, m_pInit->m_szBuffer);
-			Send(MNFT_TRANS_INFO_GET, (char*)(pPath+1),sizeof(WCHAR)*(wcslen(pPath + 1) + 1));//发送\n之后的数据.
+			SendMsg(MNFT_TRANS_INFO_GET, (char*)(pPath+1),sizeof(WCHAR)*(wcslen(pPath + 1) + 1));//发送\n之后的数据.
 		}
 		else
-			Disconnect();//无效的szBuffer;
+			Close();//无效的szBuffer;
 	}
 	//如果是发送端,等待对方来请求文件就可以了.
 }
 
-void CMiniFileTransSrv::OnWritePartial(WORD Event, DWORD Total, DWORD Read, char*buffer)
+void CMiniFileTransSrv::OnWriteMsg(WORD Msg,DWORD dwSize, char*buffer)
 {
 
 }
-void CMiniFileTransSrv::OnWriteComplete(WORD Event, DWORD Total, DWORD Read, char*buffer)
-{
 
-}
-void CMiniFileTransSrv::OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer)
+void CMiniFileTransSrv::OnReadMsg(WORD Msg,  DWORD dwSize, char*Buffer)
 {
-
-}
-void CMiniFileTransSrv::OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer)
-{
-	switch (Event)
+	switch (Msg)
 	{
 	/*******************************************************************************/
 	//只有服务器才会受收到这个消息.
 	case MNFT_INIT:
-		OnMINIInit(Read,Buffer);
+		OnMINIInit(dwSize, Buffer);
 		break;
 	/*******************************************************************************/
 		//when we Get File from peer.
 	case MNFT_TRANS_INFO_RPL:
-		OnGetTransInfoRpl(Read,Buffer);							//获取到了传输信息
+		OnGetTransInfoRpl(dwSize, Buffer);							//获取到了传输信息
 		break;
 	case MNFT_FILE_INFO_RPL:
-		OnGetFileInfoRpl(Read, Buffer);
+		OnGetFileInfoRpl(dwSize, Buffer);
 		break;
 	case MNFT_FILE_DATA_CHUNK_RPL:
-		OnGetFileDataChunkRpl(Read, Buffer);
+		OnGetFileDataChunkRpl(dwSize, Buffer);
 		break;
 	case MNFT_TRANS_FINISHED:
 		m_pDlg->SendMessage(WM_MNFT_TRANS_FINISHED, 0, 0);		//传输结束
 		break;
 	/*******************************************************************************/
-		//when we Send File to peer.
+		//when we SendMsg File to peer.
 	case MNFT_TRANS_INFO_GET:					//获取传输信息(文件个数,总大小)
-		OnGetTransInfo(Read, Buffer);
+		OnGetTransInfo(dwSize, Buffer);
 		break;
 	case MNFT_FILE_INFO_GET:					//对方开始请求文件了。
-		OnGetFileInfo(Read, Buffer);
+		OnGetFileInfo(dwSize, Buffer);
 		break;
 	case MNFT_FILE_DATA_CHUNK_GET:				//获取文件数据
-		OnGetFileDataChunk(Read, Buffer);
+		OnGetFileDataChunk(dwSize, Buffer);
 		break;
 	case MNFT_FILE_TRANS_FINISHED:				//当前文件传输完成(可能成功,也可能失败)
-		OnFileTransFinished(Read, Buffer);
+		OnFileTransFinished(dwSize, Buffer);
 		break;
 	}
 }
@@ -150,7 +143,7 @@ void CMiniFileTransSrv::OnGetFileDataChunkRpl(DWORD Read, char*Buffer)
 	MNFT_File_Data_Chunk_Data*pRpl = (MNFT_File_Data_Chunk_Data*)Buffer;
 	if (pRpl->dwFileIdentity != m_dwCurFileIdentity)
 	{
-		Disconnect();
+		Close();
 		return;
 	}
 	//写入文件数据
@@ -167,7 +160,7 @@ void CMiniFileTransSrv::OnGetFileDataChunkRpl(DWORD Read, char*Buffer)
 			//继续接收
 			MNFT_File_Data_Chunk_Data_Get fdcdg;
 			fdcdg.dwFileIdentity = m_dwCurFileIdentity;
-			Send(MNFT_FILE_DATA_CHUNK_GET, (char*)&fdcdg, sizeof(fdcdg));
+			SendMsg(MNFT_FILE_DATA_CHUNK_GET, (char*)&fdcdg, sizeof(fdcdg));
 		}
 		//接收
 		/*****************************************************************************/
@@ -188,7 +181,7 @@ void CMiniFileTransSrv::OnGetFileDataChunkRpl(DWORD Read, char*Buffer)
 		MNFT_File_Trans_Finished ftf;
 		ftf.dwFileIdentity = m_dwCurFileIdentity;
 		ftf.dwStatu = bFailed ? MNFT_STATU_FAILED : MNFT_STATU_SUCCESS;
-		Send(MNFT_FILE_TRANS_FINISHED, (char*)&ftf, sizeof(ftf));
+		SendMsg(MNFT_FILE_TRANS_FINISHED, (char*)&ftf, sizeof(ftf));
 		/*****************************************************************************/
 		//交给窗口去处理
 		m_pDlg->SendMessage(WM_MNFT_FILE_TRANS_FINISHED, ftf.dwStatu, 0);
@@ -200,7 +193,7 @@ void CMiniFileTransSrv::OnGetFileDataChunkRpl(DWORD Read, char*Buffer)
 		MNFT_File_Info_Get fig;
 		m_dwCurFileIdentity = GetTickCount();
 		fig.dwFileIdentity = m_dwCurFileIdentity;
-		Send(MNFT_FILE_INFO_GET, (char*)&fig, sizeof(fig));
+		SendMsg(MNFT_FILE_INFO_GET, (char*)&fig, sizeof(fig));
 	}
 }
 
@@ -209,7 +202,7 @@ void CMiniFileTransSrv::OnGetFileInfoRpl(DWORD Read, char*Buffer)
 	MNFT_File_Info *pRpl = (MNFT_File_Info*)Buffer;
 	if (pRpl->dwFileIdentity != m_dwCurFileIdentity)
 	{
-		Disconnect();
+		Close();
 		return;
 	}
 	//
@@ -243,7 +236,7 @@ void CMiniFileTransSrv::OnGetFileInfoRpl(DWORD Read, char*Buffer)
 				//获取数据块
 				MNFT_File_Data_Chunk_Data_Get fdcdg;
 				fdcdg.dwFileIdentity = m_dwCurFileIdentity;
-				Send(MNFT_FILE_DATA_CHUNK_GET, (char*)&fdcdg, sizeof(fdcdg));
+				SendMsg(MNFT_FILE_DATA_CHUNK_GET, (char*)&fdcdg, sizeof(fdcdg));
 			}
 		}
 	}
@@ -259,7 +252,7 @@ void CMiniFileTransSrv::OnGetFileInfoRpl(DWORD Read, char*Buffer)
 		MNFT_File_Trans_Finished ftf;
 		ftf.dwFileIdentity = m_dwCurFileIdentity;
 		ftf.dwStatu = (pFileInfo->Attribute&FILE_ATTRIBUTE_DIRECTORY || m_ullLeftFileLength == 0) ? MNFT_STATU_SUCCESS : MNFT_STATU_FAILED;
-		Send(MNFT_FILE_TRANS_FINISHED, (char*)&ftf, sizeof(ftf));
+		SendMsg(MNFT_FILE_TRANS_FINISHED, (char*)&ftf, sizeof(ftf));
 		//
 		/*****************************************************************************/
 		m_pDlg->SendMessage(WM_MNFT_FILE_TRANS_FINISHED, ftf.dwStatu, 0);
@@ -271,7 +264,7 @@ void CMiniFileTransSrv::OnGetFileInfoRpl(DWORD Read, char*Buffer)
 		MNFT_File_Info_Get fig;
 		m_dwCurFileIdentity = GetTickCount();
 		fig.dwFileIdentity = m_dwCurFileIdentity;
-		Send(MNFT_FILE_INFO_GET, (char*)&fig, sizeof(fig));
+		SendMsg(MNFT_FILE_INFO_GET, (char*)&fig, sizeof(fig));
 	}
 	free(FullPath);
 }
@@ -287,7 +280,7 @@ void CMiniFileTransSrv::OnGetTransInfoRpl(DWORD Read, char*Buffer)
 	MNFT_File_Info_Get fig;
 	m_dwCurFileIdentity = GetTickCount();
 	fig.dwFileIdentity = m_dwCurFileIdentity;
-	Send(MNFT_FILE_INFO_GET, (char*)&fig, sizeof(fig));
+	SendMsg(MNFT_FILE_INFO_GET, (char*)&fig, sizeof(fig));
 }
 
 
@@ -298,7 +291,7 @@ void CMiniFileTransSrv::OnFileTransFinished(DWORD Read, char*Buffer)
 	MNFT_File_Trans_Finished*pftf = (MNFT_File_Trans_Finished*)Buffer;
 	if (pftf->dwFileIdentity != m_dwCurFileIdentity)
 	{
-		Disconnect();
+		Close();
 		return;
 	}
 	
@@ -325,7 +318,7 @@ void CMiniFileTransSrv::OnGetFileDataChunk(DWORD Read, char*Buffer)
 	if (((MNFT_File_Data_Chunk_Data_Get*)Buffer)->dwFileIdentity != m_dwCurFileIdentity)
 	{
 		//传输错误.断开
-		Disconnect();
+		Close();
 		return;
 	}
 	//传输数据,64kb的缓冲区.
@@ -335,7 +328,7 @@ void CMiniFileTransSrv::OnGetFileDataChunk(DWORD Read, char*Buffer)
 	//如果读取结束了,也会返回TRUE,
 	ReadFile(m_hCurFile, pRpl->FileDataChunk, 0x10000, &pRpl->dwChunkSize, NULL);
 	//读了多少就发送多少。读取失败就是0,让对方  结束当前文件的读取.
-	Send(MNFT_FILE_DATA_CHUNK_RPL, (char*)pRpl, sizeof(DWORD) * 2 + pRpl->dwChunkSize);
+	SendMsg(MNFT_FILE_DATA_CHUNK_RPL, (char*)pRpl, sizeof(DWORD) * 2 + pRpl->dwChunkSize);
 	/**********************************************************************/
 	m_pDlg->SendMessage(WM_MNFT_FILE_DC_TRANSFERRED, pRpl->dwChunkSize, 0);
 	/**********************************************************************/
@@ -348,7 +341,7 @@ void CMiniFileTransSrv::OnGetFileInfo(DWORD Read, char*Buffer)
 	MNFT_File_Info_Get *pfig = (MNFT_File_Info_Get*)Buffer;
 	if (!m_JobList.GetCount())
 	{
-		Send(MNFT_TRANS_FINISHED, 0, 0);//传输结束.
+		SendMsg(MNFT_TRANS_FINISHED, 0, 0);//传输结束.
 		m_pDlg->SendMessage(WM_MNFT_TRANS_FINISHED, 0, 0); 
 	}
 	else
@@ -371,7 +364,7 @@ void CMiniFileTransSrv::OnGetFileInfo(DWORD Read, char*Buffer)
 		//交给窗口去处理
 		m_pDlg->SendMessage(WM_MNFT_FILE_TRANS_BEGIN, (WPARAM)&pReply->fiFileInfo, 0);
 		/*************************************************************************/
-		Send(MNFT_FILE_INFO_RPL, (char*)pReply, dwRplLen);
+		SendMsg(MNFT_FILE_INFO_RPL, (char*)pReply, dwRplLen);
 		free(pReply);
 		//正常情况下这里的代码是不会执行的.因为初始情况和每次结束发送后都会清除
 		if (m_hCurFile != INVALID_HANDLE_VALUE)
@@ -403,7 +396,7 @@ void CMiniFileTransSrv::OnGetTransInfo(DWORD dwRead, char*Buffer)
 	if (pFileList == NULL || pFileList[1] == NULL)
 	{
 		//无效,直接断开
-		Disconnect();
+		Close();
 		return;
 	}
 	pFileList[0] = 0;
@@ -420,7 +413,7 @@ void CMiniFileTransSrv::OnGetTransInfo(DWORD dwRead, char*Buffer)
 	TransInfoRpl.TotalSizeHi = (m_JobList.GetTotalSize() & 0xFFFFFFFF00000000) >> 32;
 	//
 	m_pDlg->SendMessage(WM_MNFT_TRANS_INFO, (WPARAM)&TransInfoRpl, m_pInit->m_dwDuty);
-	Send(MNFT_TRANS_INFO_RPL, (char*)&TransInfoRpl, sizeof(MNFT_Trans_Info));
+	SendMsg(MNFT_TRANS_INFO_RPL, (char*)&TransInfoRpl, sizeof(MNFT_Trans_Info));
 }
 
 //广度遍历获取文件列表.

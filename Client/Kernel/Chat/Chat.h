@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 #define CHAT		('C'|('H'<<8)|('A'<<16)|('T'<<24))
 
@@ -9,7 +9,7 @@
 
 
 class CChat :
-	public CEventHandler
+	public CMsgHandler
 {
 public:
 	WCHAR		m_szPeerName[256];
@@ -18,10 +18,10 @@ public:
 	HWND		m_hDlg;
 	HANDLE		m_hInit;			
 	void OnClose();							//所有模块应该在该函数里面就把相关资源清理调.因为相关的析构函数不会被调用;
-	void OnConnect();
+	void OnOpen();
 
-	void OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer);
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer){}
 
 	//开始chat;
 	void OnChatBegin(DWORD dwRead, char*szBuffer);
@@ -30,7 +30,7 @@ public:
 	//
 	static void ThreadProc(CChat*pChat);
 	static LRESULT CALLBACK DlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-	CChat();
+	CChat(CManager*pManager);
 	~CChat();
 };
 

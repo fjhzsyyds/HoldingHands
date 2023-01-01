@@ -1,12 +1,27 @@
-#include "RemoteDesktop.h"
 #include "IOCPClient.h"
+#include "RemoteDesktop.h"
+#include "Manager.h"
+
 
 extern "C" __declspec(dllexport) void  ModuleEntry(char* szServerAddr, unsigned short uPort, DWORD dwParam){
-	CRemoteDesktop rd;
-	CIOCPClient io(szServerAddr, uPort);
+	CManager *pManager = new CManager();
 
-	io.BindHandler(&rd);
-	io.Run();
-	io.UnbindHandler();
+	CIOCPClient *pClient = new CIOCPClient(pManager,
+		szServerAddr, uPort);
 
+	CMsgHandler *pHandler = new CRemoteDesktop(pManager);
+
+	pManager->Associate(pClient, pHandler);
+	pClient->Run();
+
+	delete pHandler;
+	delete pClient;
+	delete pManager;
+}
+
+int main(){
+	CIOCPClient::SocketInit();
+	ModuleEntry("81.68.224.152", 10086, 0);
+	CIOCPClient::SocketTerm();
+	return 0;
 }

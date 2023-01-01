@@ -21,9 +21,6 @@
     <ClCompile Include="RemoteDesktop.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\Common\EventHandler.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="..\Common\IOCPClient.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -31,6 +28,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="main.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\Manager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Common\MsgHandler.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

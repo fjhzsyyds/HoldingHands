@@ -6,6 +6,7 @@
 #include "MiniDownloadDlg.h"
 #include "afxdialogex.h"
 #include "MiniDownloadSrv.h"
+#include "utils.h"
 
 // CMiniDownloadDlg 对话框
 
@@ -15,13 +16,8 @@ CMiniDownloadDlg::CMiniDownloadDlg(CMiniDownloadSrv* pHandler, CWnd* pParent /*=
 	: CDialogEx(CMiniDownloadDlg::IDD, pParent)
 {
 	m_pHandler = pHandler;
-	m_ullTotalSize = 0;
-	m_ullFinishedSize = 0;
-
-	char szIP[128];
-	USHORT uPort;
-	m_pHandler->GetPeerName(szIP, uPort);
-	m_IP = CA2W(szIP);
+	auto const peer = m_pHandler->GetPeerName();
+	m_IP = CA2W(peer.first.c_str());;
 }
 
 CMiniDownloadDlg::~CMiniDownloadDlg()
@@ -38,7 +34,8 @@ void CMiniDownloadDlg::DoDataExchange(CDataExchange* pDX)
 BEGIN_MESSAGE_MAP(CMiniDownloadDlg, CDialogEx)
 	ON_BN_CLICKED(IDOK, &CMiniDownloadDlg::OnBnClickedOk)
 	ON_MESSAGE(WM_MNDD_FILEINFO, OnFileInfo)
-	ON_MESSAGE(WM_MNDD_DOWNLOAD_RESULT, OnDownloadParital)
+	ON_MESSAGE(WM_MNDD_DOWNLOAD_RESULT, OnDownloadResult)
+	ON_MESSAGE(WM_MNDD_ERROR,OnError)
 	ON_WM_CLOSE()
 END_MESSAGE_MAP()
 
@@ -50,105 +47,81 @@ void CMiniDownloadDlg::OnBnClickedOk()
 {
 }
 
+
+LRESULT CMiniDownloadDlg::OnError(WPARAM wParam, LPARAM lParam){
+	TCHAR * szError = (TCHAR*)wParam;
+	MessageBox(szError, TEXT("Error"), MB_OK | MB_ICONERROR);
+	return 0;
+}
+
 LRESULT CMiniDownloadDlg::OnFileInfo(WPARAM wParam, LPARAM lParam)
 {
-	CMiniDownloadSrv::MnddFileInfo*pFileInfo = (CMiniDownloadSrv::MnddFileInfo*)wParam;
-	CString Text;
+	/*
+	LPVOID ArgList[3];
+	ArgList[0] = (LPVOID)root["filename"].asCString();
+	ArgList[1] = (LPVOID)root["url"].asCString();
+	ArgList[2] = (LPVOID)root["filesize"].asInt();
+	*/
+	int Argc = wParam;
+	LPVOID * ArgList = (LPVOID*)lParam;
 
-	switch (pFileInfo->dwStatu)
-	{
-	case MNDD_STATU_OK:
-		m_ullTotalSize = pFileInfo->dwFileSizeHi;
-		m_ullTotalSize <<= 32;
-		m_ullTotalSize |= pFileInfo->dwFileSizeLo;
-		break;
-	case MNDD_STATU_UNKNOWN_FILE_SIZE:
-		m_ullTotalSize = -1;//假设非常大.
+	CString FileName = CA2W((char*)ArgList[0]);
+	CString Url = CA2W((char*)ArgList[1]);
+	//
+	int TotalSize = (int)ArgList[2];
+
+	GetDlgItem(IDC_URL)->SetWindowText(Url);
+	GetDlgItem(IDC_FILE_NAME)->SetWindowText(FileName);
+
+	if (TotalSize == -1){
 		m_Progress.SetMarquee(TRUE, 30);//进度条设置为未定义.
-		break;
-	case MNDD_STATU_ANALYSE_URL_FAILED:
-		MessageBox(L"Analyse url failed!", L"Error");
-		break;
-	case MNDD_STATU_INTERNETOPEN_FAILED:
-		MessageBox(L"Internet Open Failed!", L"Error");
-		break;
-	case MNDD_STATU_INTERNETCONNECT_FAILED:
-		MessageBox(L"Internet Connect Failed!", L"Error");
-		break;
-	case MNDD_STATU_OPENREMOTEFILE_FILED:
-		MessageBox(L"Open Remote File Failed!", L"Error");
-		break;
-	case MNDD_STATU_UNSUPPORTED_PROTOCOL:
-		MessageBox(L"Unsupported Protocol!", L"Error");
-		break;
-	case MNDD_STATU_HTTPSENDREQ_FAILED:
-		MessageBox(L"Http Send Request Failed!", L"Error");
-		break;
-	case MNDD_STATU_OPENLOCALFILE_FAILED:
-		MessageBox(L"Open Local File Failed!", L"Error");
-		break;
 	}
 	return 0;
 }
-LRESULT CMiniDownloadDlg::OnDownloadParital(WPARAM wParam, LPARAM lParam)
+
+LRESULT CMiniDownloadDlg::OnDownloadResult(WPARAM wParam, LPARAM lParam)
 {
-	CMiniDownloadSrv::DownloadResult*pResult = (CMiniDownloadSrv::DownloadResult*)wParam;
-	CString Title;
-	//更新下载进度.
-	m_ullFinishedSize += pResult->dwWriteSize;
-	WCHAR* MemUnits[] =
-	{
-		L"Byte",
-		L"KB",
-		L"MB",
-		L"GB",
-		L"TB"
-	};
-	//
-	ULONGLONG ullFinished = m_ullFinishedSize, ullTotal = m_ullTotalSize;
-	int MemUnitIdx1 = 0, MemUnitIdx2 = 0;
-	int MaxIdx = (sizeof(MemUnits) / sizeof(MemUnits[0])) - 1;
-	//Get FinishedSize Unit.
-	while (ullFinished > 1024 && MemUnitIdx1 < MaxIdx)
-	{
-		MemUnitIdx1++;
-		ullFinished >>= 10;
-	}
-	DWORD dwFinished = (ullFinished & 0xffffffff);
-	++dwFinished;
-	//Get TotalSize Unit
-	while (ullTotal > 1024 && MemUnitIdx2 < MaxIdx)
-	{
-		MemUnitIdx2++;
-		ullTotal >>= 10;
-	}
-	DWORD dwTotal = (ullTotal & 0xffffffff);
-	++dwTotal;
-	//
-	switch (pResult->dwStatu)
-	{
-	case 0://OK
-	case 3:
-		if (m_ullTotalSize == -1)
-		{
-			Title.Format(L"[%s] Totalo:Unknown Download:%d %s", m_IP.GetBuffer(), dwFinished, MemUnits[MemUnitIdx1]);
-		}
-		else
-		{
-			Title.Format(L"[%s] FileSize:%d %s  Download:%d %s", m_IP.GetBuffer(), dwTotal, MemUnits[MemUnitIdx2], dwFinished, MemUnits[MemUnitIdx1]);
-			m_Progress.SetPos(m_ullFinishedSize * 100 / m_ullTotalSize);
-		}
-		SetWindowText(Title);
+
+	/*
+	LPVOID ArgList[2];
+	ArgList[0] = (LPVOID)root["total_size"].asInt();
+	ArgList[1] = (LPVOID)root["finished_size"].asInt();
+	*/
+	int Argc = wParam;
+	LPVOID * ArgList = (LPVOID*)lParam;
+
+	int TotalSize = (int)ArgList[0];
+	int FinishedSize = (int)ArgList[1];
+	int Finished = (int)ArgList[2];
+	long long Progress = 0;
+
+	LARGE_INTEGER liFinished, liTotal;
+	TCHAR strFinished[128], strTotal[128];
 	
-		if (pResult->dwStatu == 3)
-			MessageBox(L"Download Finished!", m_IP.GetBuffer());
-		break;
-	case 1:
-		MessageBox(L"Internet Read File Failed!", L"Error");
-		break;
-	case 2:
-		MessageBox(L"Write File Failed!", L"Error");
-		break;
+	liFinished.QuadPart = FinishedSize;
+	liTotal.QuadPart = TotalSize;
+
+	GetStorageSizeString(liFinished, strFinished);
+
+	if (TotalSize != -1 && TotalSize){	
+		GetStorageSizeString(liTotal, strTotal);
+		CString strText;
+		strText.Format(TEXT("%s / %s"), strFinished, strTotal);
+		GetDlgItem(IDC_PROGRESS)->SetWindowText(strText);
+
+		Progress = FinishedSize;
+		Progress *= 100;
+		Progress /= TotalSize;
+		m_Progress.SetPos(Progress);
+	}
+	else{
+		CString strText;
+		strText.Format(TEXT("%s / unknown"), strFinished);
+		GetDlgItem(IDC_PROGRESS)->SetWindowText(strText);
+	}
+
+	if (Finished){
+		MessageBox(TEXT("Download Finished"), TEXT("Tips"), MB_OK | MB_ICONINFORMATION);
 	}
 	return 0;
 }
@@ -156,7 +129,7 @@ LRESULT CMiniDownloadDlg::OnDownloadParital(WPARAM wParam, LPARAM lParam)
 void CMiniDownloadDlg::OnClose()
 {
 	if (m_pHandler){
-		m_pHandler->Disconnect();
+		m_pHandler->Close();
 		m_pHandler = NULL;
 	}
 }
@@ -168,7 +141,7 @@ BOOL CMiniDownloadDlg::OnInitDialog()
 
 	// TODO:  在此添加额外的初始化
 	CString Title;
-	Title.Format(L"[%s] Getting File Size...", m_IP.GetBuffer());
+	Title.Format(TEXT("[%s] Download...."), m_IP.GetBuffer());
 	SetWindowText(Title);
 
 	m_Progress.SetRange(0, 100);

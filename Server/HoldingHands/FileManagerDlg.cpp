@@ -9,6 +9,8 @@
 #include "FileSelectDlg.h"
 #include "UrlInputDlg.h"
 #include "FileMgrInputNameDlg.h"
+#include "utils.h"
+
 //IID_IImageList
 #include <commoncontrols.h>
 // CFileManagerDlg 对话框
@@ -149,10 +151,8 @@ BOOL CFileManagerDlg::OnInitDialog()
 
 	//Set Title.
 	CString Title;
-	char szAddr[128];
-	USHORT uPort = 0;
-	m_pHandler->GetPeerName(szAddr, uPort);
-	Title.Format(L"[%s] FileManager", CA2W(szAddr).m_szBuffer);
+	auto const peer = m_pHandler->GetPeerName();
+	Title.Format(L"[%s] FileManager", CA2W(peer.first.c_str()).m_psz);
 	SetWindowText(Title);
 
 	return TRUE;  // return TRUE unless you set the focus to a control
@@ -191,7 +191,7 @@ void CFileManagerDlg::OnClose()
 {
 	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	if (m_pHandler){
-		m_pHandler->Disconnect();
+		m_pHandler->Close();
 		m_pHandler = NULL;
 	}
 }
@@ -254,34 +254,15 @@ LRESULT CFileManagerDlg::OnChDir(WPARAM Statu, LPARAM CurLocation)
 }
 
 
-WCHAR* MemUnits[] =
-{
-	L"Byte",
-	L"KB",
-	L"MB",
-	L"GB",
-	L"TB"
-};
 
 CString GetSize(DWORD lo,DWORD hi)
 {
-	ULONGLONG ullSize = hi;
-	ullSize <<= 32;
-	ullSize |= lo;
+	TCHAR strBuffer[128];
+	LARGE_INTEGER liSize;
+	liSize.LowPart = lo, liSize.HighPart = hi;
 
-	int MemUnitIdx = 0;
-	int MaxIdx = (sizeof(MemUnits) / sizeof(MemUnits[0])) - 1;
-	//Get FinishedSize Unit.
-	while (ullSize > 1024 && MemUnitIdx < MaxIdx)
-	{
-		MemUnitIdx++;
-		ullSize >>= 10;
-	}
-	DWORD dwSize = ullSize & 0xffffffff;
-	dwSize++;
-	CString Size;
-	Size.Format(L"%10u %s", dwSize, MemUnits[MemUnitIdx]);
-	return Size;
+	GetStorageSizeString(liSize, strBuffer);
+	return strBuffer;
 }
 
 void CFileManagerDlg::FillDriverList(DriverInfo*pDis, int count)

@@ -3,8 +3,8 @@
 #include "ChatInputName.h"
 #include "ChatDlg.h"
 #include "resource.h"
-CChatSrv::CChatSrv(DWORD dwIdentity) :
-CEventHandler(dwIdentity)
+CChatSrv::CChatSrv(CManager*pManager) :
+	CMsgHandler(pManager)
 {
 	m_pDlg = NULL;
 	memset(m_szNickName, 0, sizeof(m_szNickName));
@@ -16,7 +16,7 @@ CChatSrv::~CChatSrv()
 }
 
 
-void CChatSrv::OnConnect()
+void CChatSrv::OnOpen()
 {
 	CChatInputName dlg;
 	dlg.DoModal();
@@ -27,10 +27,10 @@ void CChatSrv::OnConnect()
 	m_pDlg = new CChatDlg(this);
 	if (m_pDlg->Create(IDD_CHAT_DLG,CWnd::GetDesktopWindow()) == FALSE)
 	{
-		Disconnect();
+		Close();
 		return;
 	}
-	//禁用send button.
+	//禁用SendMsg button.
 	m_pDlg->GetDlgItem(IDOK)->EnableWindow(FALSE);
 	m_pDlg->ShowWindow(SW_SHOW);
 	//
@@ -55,12 +55,12 @@ void CChatSrv::OnChatInit(DWORD dwRead, char*szBuffer)
 	if (dwStatu)
 	{
 		//开始聊天
-		Send(CHAT_BEGIN, (char*)m_szNickName, sizeof(WCHAR)*((wcslen(m_szNickName)+1)));
+		SendMsg(CHAT_BEGIN, (char*)m_szNickName, sizeof(WCHAR)*((wcslen(m_szNickName)+1)));
 		m_pDlg->GetDlgItem(IDOK)->EnableWindow(TRUE);
 	}
 	else
 	{
-		Disconnect();
+		Close();
 	}
 }
 void CChatSrv::OnChatMsg(DWORD dwRead, char*szbuffer)
@@ -72,36 +72,27 @@ void CChatSrv::OnChatMsg(DWORD dwRead, char*szbuffer)
 	m_pDlg->m_MsgList.ReplaceSel(NewMsg);
 }
 
-void CChatSrv::OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Buffer)
+void CChatSrv::OnReadMsg(WORD Msg,  DWORD dwSize, char*Buffer)
 {
-	switch (Event)
+	switch (Msg)
 	{
 	case CHAT_INIT:
-		OnChatInit(dwRead, Buffer);
+		OnChatInit(dwSize, Buffer);
 		break;
 	case CHAT_MSG:
-		OnChatMsg(dwRead, Buffer);
+		OnChatMsg(dwSize, Buffer);
 		break;
 	default:
 		break;
 	}
 }
 
-void CChatSrv::OnReadPartial(WORD Event, DWORD Total, DWORD dwRead, char*Buffer)
+void CChatSrv::OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
 
 }
 
-void CChatSrv::OnWritePartial(WORD Event, DWORD Total, DWORD dwWrite, char*Buffer)
+void CChatSrv::SendMsgMsg(WCHAR*szMsg)
 {
-
-}
-void CChatSrv::OnWriteComplete(WORD Event, DWORD Total, DWORD dwWrite, char*Buffer)
-{
-
-}
-
-void CChatSrv::SendMsg(WCHAR*szMsg)
-{
-	Send(CHAT_MSG, (char*)szMsg, sizeof(WCHAR)*(wcslen(szMsg) + 1));
+	SendMsg(CHAT_MSG, (char*)szMsg, sizeof(WCHAR)*(wcslen(szMsg) + 1));
 }

@@ -1,9 +1,11 @@
 #include "stdafx.h"
 #include "MiniDownloadSrv.h"
 #include "MiniDownloadDlg.h"
+#include "json\json.h"
+#include "utils.h"
 
-CMiniDownloadSrv::CMiniDownloadSrv(DWORD Identity) :
-CEventHandler(Identity)
+CMiniDownloadSrv::CMiniDownloadSrv(CManager*pManager) :
+	CMsgHandler(pManager)
 {
 	m_pDlg = NULL;
 }
@@ -23,75 +25,119 @@ void CMiniDownloadSrv::OnClose()
 		m_pDlg = NULL;
 	}
 }
-void CMiniDownloadSrv::OnConnect()
+void CMiniDownloadSrv::OnOpen()
 {
 	//发送请求.获取文件大小.
-	Send(MNDD_GET_FILE_INFO, 0, 0);
+	SendMsg(MNDD_GET_FILE_INFO, 0, 0);
 	//
 	m_pDlg = new CMiniDownloadDlg(this);
-	if (FALSE == m_pDlg->Create(IDD_MNDD_DLG,CWnd::GetDesktopWindow()))
-	{
-		Disconnect();
+	if (!m_pDlg->Create(IDD_MNDD_DLG,CWnd::GetDesktopWindow())){
+		Close();
 		return;
 	}
 	m_pDlg->ShowWindow(SW_SHOW);
 }
 
-void CMiniDownloadSrv::OnReadPartial(WORD Event, DWORD Total, DWORD dwRead, char*Buffer)
+void CMiniDownloadSrv::OnReadMsg(WORD Msg,  DWORD dwSize, char*Buffer)
 {
-
-}
-void CMiniDownloadSrv::OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Buffer)
-{
-	switch (Event)
+	switch (Msg)
 	{
 	case MNDD_FILE_INFO:
-		OnGetFileInfoRpl(dwRead, Buffer);
+		OnFileInfo(Buffer);
 		break;
 	case MNDD_DOWNLOAD_RESULT:
-		OnDownloadRpl(dwRead, Buffer);
+		OnDownloadResult(Buffer);
 		break;
 	default:
 		break;
 	}
 }
 
-void CMiniDownloadSrv::OnWritePartial(WORD Event, DWORD Total, DWORD dwWrite, char*Buffer)
-{
-
-}
-void CMiniDownloadSrv::OnWriteComplete(WORD Event, DWORD Total, DWORD dwWrite, char*Buffer)
+void CMiniDownloadSrv::OnWriteMsg(WORD Msg,DWORD dwSize, char*Buffer)
 {
 
 }
 
-void CMiniDownloadSrv::OnDownloadRpl(DWORD dwRead, char*Buffer)
+void CMiniDownloadSrv::OnDownloadResult(char*result)
 {
-	DownloadResult* pResult = (DownloadResult*)Buffer;
-	switch (pResult->dwStatu)
+	Json::Value root;
+	if (!Json::Reader().parse(result, root)){
+		m_pDlg->SendMessage(WM_MNDD_ERROR, (WPARAM)TEXT("Parse Json Failed"));
+		Close();
+		return;
+	}
+	
+	if (root["code"] != "0"){
+		wchar_t * err = convertGB2312ToUtf16(root["err"].asCString());
+		m_pDlg->SendMessage(WM_MNDD_ERROR, (WPARAM)err);
+		delete[] err;
+		Close();
+		return;
+	}
+	/*
 	{
-	case 0:										//下载成功
-		Send(MNDD_DOWNLOAD_CONTINUE, 0, 0);
-		break;
-	default:
-		Send(MNDD_DOWNLOAD_END, 0, 0);			//其他情况,包括正常下载完毕和出现错误,直接终止下载.
-		break;
+		"code" : "",
+		"err" : "",
+		"total_size" :
+		"finished_size" :
 	}
-	m_pDlg->SendMessage(WM_MNDD_DOWNLOAD_RESULT, (WPARAM)pResult, 0);
+	*/
+	LPVOID ArgList[3] = { 0 };
+	ArgList[0] = (LPVOID)root["total_size"].asInt();
+	ArgList[1] = (LPVOID)root["finished_size"].asInt();
+	
+	if (root["err"] == "finished"){
+		ArgList[2] = (LPVOID)1;
+	}
+
+	m_pDlg->SendMessage(WM_MNDD_DOWNLOAD_RESULT,
+		sizeof(ArgList) / sizeof(ArgList[0]), (LPARAM)ArgList);
+	//continue download....
+	if (!ArgList[2]){
+		SendMsg(MNDD_DOWNLOAD_CONTINUE, 0, 0);
+	}
+	else{
+		//end.....
+		SendMsg(MNDD_DOWNLOAD_END, 0, 0);
+	}
 }
 
-void CMiniDownloadSrv::OnGetFileInfoRpl(DWORD dwRead, char*Buffer)
+void CMiniDownloadSrv::OnFileInfo(char*fileinfo)
 {
-	MnddFileInfo*pFileInfo = (MnddFileInfo*)Buffer;
-	switch (pFileInfo->dwStatu)
-	{
-	case MNDD_STATU_OK:	//ok
-	case MNDD_STATU_UNKNOWN_FILE_SIZE://大小未知.
-		Send(MNDD_DOWNLOAD_CONTINUE, 0, 0);//开始下载
-		break;
-	default:
-		Send(MNDD_DOWNLOAD_END, 0, 0);		//终止下载.
-		break;
+	Json::Value root;
+	if (!Json::Reader().parse(fileinfo, root)){
+		m_pDlg->SendMessage(WM_MNDD_ERROR, (WPARAM)TEXT("Parse Json Failed"));
+		Close();
+		return;
 	}
-	m_pDlg->SendMessage(WM_MNDD_FILEINFO, (WPARAM)pFileInfo, 0);
+
+	/*
+	{
+		"code" : ,
+		"err" : "",
+		"filename" : "",
+		"url" : "",
+		"filesize": -1,		//-1 表示未知
+	}
+	*/
+	if (root["code"] != "0"){
+		//失败了....,结束...
+		wchar_t * err = convertGB2312ToUtf16(root["err"].asCString());
+		m_pDlg->SendMessage(WM_MNDD_ERROR, (WPARAM)err);
+		delete[] err;
+		Close();
+		return;
+	}
+	//
+	LPVOID ArgList[3];
+	ArgList[0] = (LPVOID)root["filename"].asCString();
+	ArgList[1] = (LPVOID)root["url"].asCString();
+	ArgList[2] = (LPVOID)root["filesize"].asInt();
+
+	m_pDlg->SendMessage(WM_MNDD_FILEINFO,
+		sizeof(ArgList) / sizeof(ArgList[0]), (LPARAM)ArgList);
+
+	if (root["filesize"].asInt() != 0){
+		SendMsg(MNDD_DOWNLOAD_CONTINUE, 0, 0);
+	}
 }

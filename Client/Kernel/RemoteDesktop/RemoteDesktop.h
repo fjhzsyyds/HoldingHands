@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 #include "DesktopGrab.h"
 #define REMOTEDESKTOP	('R'|('D'<<8)|('T'<<16)|('P'<<24))
 
@@ -23,7 +23,7 @@
 #define REMOTEDESKTOP_FLAG_CAPTURE_TRANSPARENT	(0x2)
 
 class CRemoteDesktop :
-	public CEventHandler
+	public CMsgHandler
 {
 private:
 	typedef struct
@@ -64,11 +64,13 @@ private:
 	static void CALLBACK ClipdListenProc(CRemoteDesktop*pThis);
 	static LRESULT CALLBACK WndProc(HWND hWnd,UINT uMsg,WPARAM wParam,LPARAM lParam);
 public:
-	void OnClose();
-	void OnConnect();
 
-	void OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer);
+	void OnClose();
+	void OnOpen();
+
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer){}
+
 
 	void OnGetSize();
 
@@ -81,7 +83,7 @@ public:
 	void OnSetClipbdText(char*szText);
 	void SetClipbdText(char*szText);
 
-	CRemoteDesktop();
+	CRemoteDesktop(CManager*pManager);
 	~CRemoteDesktop();
 };
 

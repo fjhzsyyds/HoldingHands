@@ -39,7 +39,7 @@ END_MESSAGE_MAP()
 void CAudioDlg::OnClose()
 {
 	if (m_pHandler){
-		m_pHandler->Disconnect();
+		m_pHandler->Close();
 		m_pHandler = NULL;
 	}
 }
@@ -58,13 +58,10 @@ BOOL CAudioDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
 
-	// TODO:  在此添加额外的初始化
-	char IP[128] = { 0 };
-	USHORT uPort;
-	m_pHandler->GetPeerName(IP, uPort);
+	auto const peer = m_pHandler->GetPeerName();
 	//
 	CString Title;
-	Title.Format(L"[%s] Microphone", CA2W(IP).m_szBuffer);
+	Title.Format(L"[%s] Microphone", CA2W(peer.first.c_str()).m_psz);
 	SetWindowText(Title);
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常:  OCX 属性页应返回 FALSE

@@ -93,5 +93,6 @@ public:
 
 
 	afx_msg void OnDisplayFullscreen();
+	afx_msg void OnOtherScreenshot();
 };
 

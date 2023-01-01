@@ -18,7 +18,6 @@ CPacket::~CPacket()
 	m_dwBufferLen = 0;
 }
 
-
 //分配Buffer
 BOOL CPacket::AllocateMem(DWORD BodyLen)
 {
@@ -27,8 +26,7 @@ BOOL CPacket::AllocateMem(DWORD BodyLen)
 	if (NewSize > MAX_BUFFER_SIZE)
 		return FALSE;//太大了,不管了.
 
-	if (NewSize > m_dwBufferLen)
-	{
+	if (NewSize > m_dwBufferLen){
 		//realloc memory
 		char*pNewBuffer;
 		pNewBuffer = (char*)_aligned_realloc(m_pBuffer, NewSize,alignment);
@@ -41,13 +39,3 @@ BOOL CPacket::AllocateMem(DWORD BodyLen)
 	return m_pBuffer!=NULL;
 }
 
-
-void CPacket::Encrypt(DWORD dwOffset, DWORD dwLen)
-{
-	DWORD dwEnd = dwOffset + dwLen;
-	DWORD dwKeyLen = strlen(KEY);
-
-	for (int i = dwOffset; i <dwEnd; i++){
-		m_pBuffer[i] ^= KEY[i%dwKeyLen];
-	}
-}

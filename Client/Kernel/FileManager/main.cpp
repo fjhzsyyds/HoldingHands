@@ -1,12 +1,30 @@
-#include "FileManager.h"
 #include "IOCPClient.h"
+#include "Manager.h"
+#include "FileManager.h"
 
-extern "C" __declspec(dllexport) void  ModuleEntry(char* szServerAddr, unsigned short uPort, DWORD dwParam){
-	CFileManager filemgr((CModuleMgr*)dwParam);
-	CIOCPClient io(szServerAddr, uPort);
+extern "C" __declspec(dllexport) void  ModuleEntry(char* szServerAddr, 
+	unsigned short uPort, DWORD dwParam = 0){
+	
+	CManager *pManager = new CManager();
 
-	io.BindHandler(&filemgr);
-	io.Run();
-	io.UnbindHandler();
+	CIOCPClient *pClient = new CIOCPClient(pManager,
+		szServerAddr, uPort);
 
+	CMsgHandler *pHandler = new CFileManager(pManager);
+
+	pManager->Associate(pClient, pHandler);
+	pClient->Run();
+
+	delete pHandler;
+	delete pClient;
+	delete pManager;
 }
+
+#ifdef _DEBUG
+int main(){
+	CIOCPClient::SocketInit();
+	ModuleEntry("81.68.224.152", 10086);
+	CIOCPClient::SocketTerm(); 
+}
+
+#endif

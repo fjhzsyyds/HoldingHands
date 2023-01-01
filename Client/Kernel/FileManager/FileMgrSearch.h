@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 #include "SearchFile.h"
 #define FILEMGR_SEARCH			('S'|('R'<<8)|('C'<<16)|('H'<<24))
 
@@ -12,7 +12,7 @@
 #define FILE_MGR_SEARCH_OVER		(0xaca4)
 
 class CFileMgrSearch :
-	public CEventHandler
+	public CMsgHandler
 {
 private:
 
@@ -20,17 +20,16 @@ private:
 
 public:
 	void OnClose();
-	void OnConnect();
+	void OnOpen();
 
-	void OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer);
-
+	void OnReadMsg(WORD Msg,  DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer){};
 
 
 	void OnSearch(char*Buffer);
 	void OnStop();
 
-	CFileMgrSearch();
+	CFileMgrSearch(CManager*pManager);
 	~CFileMgrSearch();
 };
 

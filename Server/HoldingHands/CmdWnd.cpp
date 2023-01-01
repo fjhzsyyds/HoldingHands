@@ -54,10 +54,8 @@ int CCmdWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	//
 	//设置窗口标题
 	CString Title;
-	char IP[64];
-	USHORT uPort = 0;
-	m_pHandler->GetPeerName(IP, uPort);
-	Title.Format(L"[%s] cmd ", CA2W(IP).m_psz);
+	auto const peer = m_pHandler->GetPeerName();
+	Title.Format(L"[%s] cmd ", CA2W(peer.first.c_str()).m_psz);
 	SetWindowText(Title);
 	return 0;
 }
@@ -67,7 +65,7 @@ void CCmdWnd::OnClose()
 {
 	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	if (m_pHandler){
-		m_pHandler->Disconnect();
+		m_pHandler->Close();
 		m_pHandler = NULL;
 	}
 }
@@ -121,7 +119,7 @@ BOOL CCmdWnd::PreTranslateMessage(MSG* pMsg)
 				//发送命令
 				aCmd = (CW2A(Cmd));
 				aCmd += "\r\n";
-				m_pHandler->Send(CMD_COMMAND, aCmd.GetBuffer(), aCmd.GetLength() + 1);
+				m_pHandler->SendMsg(CMD_COMMAND, aCmd.GetBuffer(), aCmd.GetLength() + 1);
 				if (Cmd.GetLength())
 				{
 					//记录一下命令.

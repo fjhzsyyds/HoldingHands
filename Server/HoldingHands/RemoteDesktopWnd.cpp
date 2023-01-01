@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "RemoteDesktopWnd.h"
 #include "RemoteDesktopSrv.h"
+#include "MainFrm.h"
+#include "utils.h"
 
 #pragma comment(lib,"HHRDKbHook.lib")
 
@@ -32,7 +34,8 @@ CRemoteDesktopWnd::CRemoteDesktopWnd(CRemoteDesktopSrv*pHandler)
 	m_DisplayMode |= DISPLAY_TILE;
 	//
 	if (!dwWndCount){
-		hKbHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, GetModuleHandle(L"HHRDKbHook.dll"), NULL);
+		hKbHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc,
+			GetModuleHandle(TEXT("HHRDKbHook.dll")), NULL);
 		dwWndCount++;
 	}
 }
@@ -76,6 +79,7 @@ BEGIN_MESSAGE_MAP(CRemoteDesktopWnd, CFrameWnd)
 	ON_WM_CHANGECBCHAIN()
 	ON_WM_DRAWCLIPBOARD()
 	ON_COMMAND(ID_DISPLAY_FULLSCREEN, &CRemoteDesktopWnd::OnDisplayFullscreen)
+	ON_COMMAND(ID_OTHER_SCREENSHOT, &CRemoteDesktopWnd::OnOtherScreenshot)
 END_MESSAGE_MAP()
 
 
@@ -83,7 +87,7 @@ void CRemoteDesktopWnd::OnClose()
 {
 	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	if (m_pHandler){
-		m_pHandler->Disconnect();
+		m_pHandler->Close();
 		m_pHandler = NULL;
 	}
 	//
@@ -109,11 +113,9 @@ int CRemoteDesktopWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	pMenu->CheckMenuRadioItem(ID_DISPLAY_STRETCH, ID_DISPLAY_TILE, ID_DISPLAY_TILE, MF_BYCOMMAND);
 	
 	// TODO:  在此添加您专用的创建代码
-	char szIP[128];
-	USHORT uPort;
-	m_pHandler->GetPeerName(szIP, uPort);
+	auto  const & peer = m_pHandler->GetPeerName();
 
-	m_Title.Format(L"[%s] RemoteDesktop", CA2W(szIP).m_psz);
+	m_Title.Format(TEXT("[%s] RemoteDesktop"), CA2W(peer.first.c_str()).m_psz);
 	SetWindowText(m_Title);
 
 	m_hDC = ::GetDC(m_hWnd);
@@ -153,8 +155,8 @@ void CRemoteDesktopWnd::OnDisplayTile()
 	//设置滚动条范围
 	CRect rect;
 	GetClientRect(rect);
-	SetScrollRange(SB_HORZ, 0, (m_dwDeskWidth - rect.right) / SCROLL_UINT);
-	SetScrollRange(SB_VERT, 0, (m_dwDeskHeight - rect.bottom) / SCROLL_UINT);
+	SetScrollRange(SB_HORZ, 0, (int)((m_dwDeskWidth - rect.right) / SCROLL_UINT));
+	SetScrollRange(SB_VERT, 0, (int)((m_dwDeskHeight - rect.bottom) / SCROLL_UINT));
 	m_OrgPt.x = m_OrgPt.y = 0;
 	SetScrollPos(SB_VERT, m_OrgPt.y);
 	SetScrollPos(SB_HORZ, m_OrgPt.x);
@@ -215,8 +217,8 @@ void CRemoteDesktopWnd::OnUpdateCaptureTransparentwindow(CCmdUI *pCmdUI)
 
 LRESULT CRemoteDesktopWnd::OnError(WPARAM wParam, LPARAM lParam)
 {
-	WCHAR*Tips = (WCHAR*)wParam;
-	MessageBox(Tips, L"Error");
+	TCHAR*Tips = (TCHAR*)wParam;
+	MessageBox(Tips, TEXT("Error"));
 	return 0;
 }
 
@@ -234,8 +236,8 @@ LRESULT CRemoteDesktopWnd::OnDesktopSize(WPARAM wParam, LPARAM lParam)
 
 	if (m_DisplayMode & DISPLAY_TILE){				//平铺模式.
 		//设置滚动条范围
-		SetScrollRange(SB_HORZ, 0, (m_dwDeskWidth - ClientRect.right) / SCROLL_UINT);
-		SetScrollRange(SB_VERT, 0, (m_dwDeskHeight - ClientRect.bottom) / SCROLL_UINT);
+		SetScrollRange(SB_HORZ, 0,(int)( (m_dwDeskWidth - ClientRect.right) / SCROLL_UINT));
+		SetScrollRange(SB_VERT, 0, (int)((m_dwDeskHeight - ClientRect.bottom) / SCROLL_UINT));
 		m_OrgPt.x = m_OrgPt.y = 0;
 		SetScrollPos(SB_VERT, m_OrgPt.y);
 		SetScrollPos(SB_HORZ, m_OrgPt.x);
@@ -259,7 +261,7 @@ LRESULT CRemoteDesktopWnd::OnDraw(WPARAM wParam, LPARAM lParam)
 			pBitmap->bmWidth, pBitmap->bmHeight, SRCCOPY);
 	}
 	else if (m_DisplayMode & DISPLAY_TILE){
-		::BitBlt(m_hDC, -m_OrgPt.x*SCROLL_UINT, -m_OrgPt.y*SCROLL_UINT, 
+		::BitBlt(m_hDC, -(int)(m_OrgPt.x*SCROLL_UINT), -(int)(m_OrgPt.y*SCROLL_UINT), 
 			m_dwDeskWidth, m_dwDeskHeight, hMemDC, 0, 0, SRCCOPY);
 	}
 	else if (m_DisplayMode & DISPLAY_FULLSCREEN){
@@ -278,7 +280,7 @@ LRESULT CRemoteDesktopWnd::OnDraw(WPARAM wParam, LPARAM lParam)
 	if ((GetTickCount() - m_dwLastTime) >= 1000){
 		CString text;
 		//显示FPS
-		text.Format(L"%s - [Fps: %d]", m_Title.GetBuffer(), m_dwFps);
+		text.Format(TEXT("%s - [Fps: %d]"), m_Title.GetBuffer(), m_dwFps);
 		SetWindowText(text);
 		//刷新
 		m_dwLastTime = GetTickCount();
@@ -311,23 +313,23 @@ BOOL CRemoteDesktopWnd::OnWndMsg(UINT message, WPARAM wParam, LPARAM lParam, LRE
 		{
 			RECT rect;
 			GetClientRect(&rect);
-			dwX = dwX * 65535.0 / rect.right;
-			dwY = dwY * 65535.0 / rect.bottom;
+			dwX = (DWORD)(dwX * 65535.0 / rect.right);
+			dwY = (DWORD)(dwY * 65535.0 / rect.bottom);
 		}
 		else if (m_DisplayMode & DISPLAY_TILE)
 		{
-			dwX += m_OrgPt.x * SCROLL_UINT;
-			dwY += m_OrgPt.y * SCROLL_UINT;
-			dwX = dwX * 65535.0 / m_dwDeskWidth;
-			dwY = dwY * 65535.0 / m_dwDeskHeight;
+			dwX += (DWORD)(m_OrgPt.x * SCROLL_UINT);
+			dwY += (DWORD)(m_OrgPt.y * SCROLL_UINT);
+			dwX = (DWORD)(dwX * 65535.0 / m_dwDeskWidth);
+			dwY = (DWORD)(dwY * 65535.0 / m_dwDeskHeight);
 		}
 		else if (m_DisplayMode & DISPLAY_FULLSCREEN){
 			//
 			if (m_bFullScreenStretchMode){
 				RECT rect;
 				GetClientRect(&rect);
-				dwX = dwX * 65535.0 / rect.right;
-				dwY = dwY * 65535.0 / rect.bottom;
+				dwX = (DWORD)(dwX * 65535.0 / rect.right);
+				dwY = (DWORD)(dwY * 65535.0 / rect.bottom);
 			}
 			else {
 				//
@@ -336,8 +338,8 @@ BOOL CRemoteDesktopWnd::OnWndMsg(UINT message, WPARAM wParam, LPARAM lParam, LRE
 					return CFrameWnd::OnWndMsg(message, wParam, lParam, pResult);			//ignore this message
 				}
 				//
-				dwX = (dwX - m_FullScreenDrawOrg.x) * 65535.0 / m_dwDeskWidth;
-				dwY = (dwY -  m_FullScreenDrawOrg.y) * 65535.0 / m_dwDeskHeight;
+				dwX = (DWORD)((dwX - m_FullScreenDrawOrg.x) * 65535.0 / m_dwDeskWidth);
+				dwY = (DWORD)((dwY - m_FullScreenDrawOrg.y) * 65535.0 / m_dwDeskHeight);
 			}
 		}
 		
@@ -349,6 +351,7 @@ BOOL CRemoteDesktopWnd::OnWndMsg(UINT message, WPARAM wParam, LPARAM lParam, LRE
 		m_pHandler->Control(&Param);
 		return TRUE;
 	}
+
 	if ((message == WM_KEYDOWN || message == WM_KEYUP) && (m_ControlFlags&CONTROL_KEYBOARD))
 	{
 		Param.dwType = message;				//消息类型
@@ -377,11 +380,11 @@ void CRemoteDesktopWnd::OnSize(UINT nType, int cx, int cy)
 			return CFrameWnd::OnSize(nType, cx, cy);
 		}
 		//计算滚动条.
-		SetScrollRange(SB_VERT, 0, (m_dwDeskHeight - cy) / SCROLL_UINT);
-		SetScrollRange(SB_HORZ, 0, (m_dwDeskWidth - cx) / SCROLL_UINT);
+		SetScrollRange(SB_VERT, 0, (int)((m_dwDeskHeight - cy) / SCROLL_UINT));
+		SetScrollRange(SB_HORZ, 0, (int)((m_dwDeskWidth - cx) / SCROLL_UINT));
 		//限制水平位置,不能超过最大值
-		m_OrgPt.x = min(m_OrgPt.x, (m_dwDeskWidth - cx) / SCROLL_UINT);
-		m_OrgPt.y = min(m_OrgPt.y, (m_dwDeskHeight - cy) / SCROLL_UINT);
+		m_OrgPt.x = min(m_OrgPt.x, (int)((m_dwDeskWidth - cx) / SCROLL_UINT));
+		m_OrgPt.y = min(m_OrgPt.y, (int)((m_dwDeskHeight - cy) / SCROLL_UINT));
 		//重新设置Pos
 		SetScrollPos(SB_HORZ, m_OrgPt.x);
 		SetScrollPos(SB_VERT, m_OrgPt.y);
@@ -406,13 +409,13 @@ BOOL CRemoteDesktopWnd::PreCreateWindow(CREATESTRUCT& cs)
 			GetClassInfo(AfxGetInstanceHandle(), cs.lpszClass, &wndclass);
 			//取消水平大小和竖直大小变化时的重绘.没用OnPaint,会白屏.
 			wndclass.style &= ~(CS_HREDRAW |CS_VREDRAW );
-			wndclass.lpszClassName = L"RemoteDesktopWndClass";
+			wndclass.lpszClassName = TEXT("RemoteDesktopWndClass");
 
 			bRegistered = AfxRegisterClass(&wndclass);
 		}
 		if (!bRegistered)
 			return FALSE;
-		cs.lpszClass = L"RemoteDesktopWndClass";
+		cs.lpszClass = TEXT("RemoteDesktopWndClass");
 		return TRUE;
 	}
 	return FALSE;
@@ -426,6 +429,7 @@ void CRemoteDesktopWnd::OnGetMinMaxInfo(MINMAXINFO* lpMMI)
 		lpMMI->ptMaxSize.y = m_dwMaxHeight;
 	}
 	else if (m_DisplayMode & DISPLAY_FULLSCREEN){
+
 		//需要这些代码才能全屏，至于为啥我也不知道，反正它就是全屏了....
 		lpMMI->ptMaxSize.x = m_FullScreen.Width();
 		lpMMI->ptMaxSize.y = m_FullScreen.Height();
@@ -469,7 +473,7 @@ void CRemoteDesktopWnd::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBa
 		break;
 	}
 	//
-	m_OrgPt.x = min((m_dwDeskWidth - rect.right) / SCROLL_UINT, m_OrgPt.x);
+	m_OrgPt.x = min((int)((m_dwDeskWidth - rect.right) / SCROLL_UINT), m_OrgPt.x);
 	m_OrgPt.x = max(0, m_OrgPt.x);
 	SetScrollPos(SB_HORZ,m_OrgPt.x);
 	CFrameWnd::OnHScroll(nSBCode, nPos, pScrollBar);
@@ -503,7 +507,7 @@ void CRemoteDesktopWnd::OnVScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBa
 		break;
 	}
 	//
-	m_OrgPt.y = min((m_dwDeskHeight - rect.bottom) / SCROLL_UINT, m_OrgPt.y);
+	m_OrgPt.y = min((int)((m_dwDeskHeight - rect.bottom) / SCROLL_UINT), m_OrgPt.y);
 	m_OrgPt.y = max(0, m_OrgPt.y);
 	SetScrollPos(SB_VERT, m_OrgPt.y);
 
@@ -522,28 +526,32 @@ void CRemoteDesktopWnd::OnSetFocus(CWnd* pOldWnd)
 void CRemoteDesktopWnd::OnMaxfps10()
 {
 	m_pHandler->SetMaxFps(10);
-	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_10, MF_BYCOMMAND);
+	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
+		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_10, MF_BYCOMMAND);
 }
 
 
 void CRemoteDesktopWnd::OnMaxfps20()
 {
 	m_pHandler->SetMaxFps(20);
-	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_20, MF_BYCOMMAND);
+	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
+		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_20, MF_BYCOMMAND);
 }
 
 
 void CRemoteDesktopWnd::OnMaxfps30()
 {
 	m_pHandler->SetMaxFps(30);
-	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_30, MF_BYCOMMAND);
+	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
+		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_30, MF_BYCOMMAND);
 }
 
 
 void CRemoteDesktopWnd::OnMaxfpsNolimit()
 {
 	m_pHandler->SetMaxFps(-1); 
-	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_NOLIMIT, MF_BYCOMMAND);
+	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
+		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_NOLIMIT, MF_BYCOMMAND);
 }
 
 
@@ -577,7 +585,8 @@ void CRemoteDesktopWnd::OnChangeCbChain(HWND hWndRemove, HWND hWndAfter)
 		m_hNextViewer = hWndAfter;
 	}
 	else if (m_hNextViewer){
-		::SendMessage(m_hNextViewer, WM_CHANGECBCHAIN, (WPARAM)hWndRemove, (LPARAM)hWndAfter);
+		::SendMessage(m_hNextViewer, WM_CHANGECBCHAIN,
+			(WPARAM)hWndRemove, (LPARAM)hWndAfter);
 	}
 	//
 }
@@ -664,3 +673,68 @@ void CRemoteDesktopWnd::OnDisplayFullscreen()
 	}
 }
 
+
+
+void CRemoteDesktopWnd::OnOtherScreenshot()
+{
+	if (m_dwDeskHeight == 0 || m_dwDeskWidth == 0)
+		return ;
+	//
+	DWORD Width, Height; 
+	DWORD dwBmpSize;
+	BITMAPINFOHEADER bi = { 0 };
+	BITMAPFILEHEADER bmfHeader = { 0 };
+
+	LPVOID Buffer = m_pHandler->GetBmpData(&Width, &Height, &dwBmpSize);
+
+	if (Buffer == nullptr){
+		return;
+	}
+
+	bi.biSize = sizeof(BITMAPINFOHEADER);
+	bi.biWidth = Width;
+	bi.biHeight = Height;
+	bi.biPlanes = 1;
+	bi.biBitCount = 24;
+	bi.biCompression = BI_RGB;
+
+	bmfHeader.bfType = 0x4D42;
+	bmfHeader.bfOffBits = (DWORD)sizeof(BITMAPFILEHEADER) + (DWORD)sizeof(BITMAPINFOHEADER);
+	bmfHeader.bfSize = dwBmpSize + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+
+	CString FileName;
+	CTime Time = CTime::GetTickCount();
+	FileName.Format(L"\\%s.bmp", Time.Format(L"%Y-%m-%d_%H_%M_%S").GetBuffer());
+
+	CMainFrame * pMainWnd = (CMainFrame*)AfxGetMainWnd();
+	CConfig & config = pMainWnd->getConfig();
+	const string & val = config.getconfig("remote_desktop", "screenshot_save_path");
+	CString SavePath = CA2W(val.c_str());
+
+	SavePath += FileName;
+
+	if (SavePath[1] != ':'){
+		CString csCurrentDir;
+		csCurrentDir.Preallocate(MAX_PATH);
+		GetCurrentDirectory(MAX_PATH, csCurrentDir.GetBuffer());
+		SavePath = csCurrentDir + "\\" + SavePath;
+	}
+
+	MakesureDirExist(SavePath, TRUE);
+	HANDLE hFile = CreateFile(SavePath, GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	CString err;
+	if (hFile != INVALID_HANDLE_VALUE){
+		DWORD dwWrite = 0;
+		WriteFile(hFile, &bmfHeader, sizeof(bmfHeader), &dwWrite, NULL);
+		WriteFile(hFile, &bi, sizeof(bi), &dwWrite, NULL);
+		WriteFile(hFile, Buffer, dwBmpSize, &dwWrite, NULL);
+
+		CloseHandle(hFile);
+		err.Format(TEXT("Image has been save to %s"), SavePath);
+	}
+	else{
+		err.Format(TEXT("CreateFile failed with error: %d"), GetLastError());
+	}
+	delete[] Buffer;
+	MessageBox(err,TEXT("Tips"),MB_OK|MB_ICONINFORMATION);
+}

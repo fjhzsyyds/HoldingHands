@@ -2,8 +2,8 @@
 #include "FileMgrSearch.h"
 
 
-CFileMgrSearch::CFileMgrSearch() :
-CEventHandler(FILEMGR_SEARCH)
+CFileMgrSearch::CFileMgrSearch(CManager*pManager) :
+CMsgHandler(pManager,FILEMGR_SEARCH)
 {
 }
 
@@ -18,19 +18,15 @@ void CFileMgrSearch::OnClose()
 	OnStop();
 }
 
-void CFileMgrSearch::OnConnect()
+void CFileMgrSearch::OnOpen()
 {
 
 }
 
-void CFileMgrSearch::OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer)
-{
 
-}
-
-void CFileMgrSearch::OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer)
+void CFileMgrSearch::OnReadMsg(WORD Msg,DWORD dwSize, char*Buffer)
 {
-	switch (Event)
+	switch (Msg)
 	{
 	case FILE_MGR_SEARCH_SEARCH:
 		OnSearch(Buffer);
@@ -44,17 +40,17 @@ void CFileMgrSearch::OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Bu
 }
 
 
-void OnFoundFile(wchar_t* path, WIN32_FIND_DATAW* pfd, LPVOID Param)
+void OnFoundFile(TCHAR* path, WIN32_FIND_DATAW* pfd, LPVOID Param)
 {
 	//printf("OnFoundFile!");
 	struct FindFile
 	{
 		DWORD dwFileAttribute;
-		WCHAR szFileName[2];
+		TCHAR szFileName[2];
 	};
 	//找到一个就发送一个.
 	CFileMgrSearch*pMgrSearch = (CFileMgrSearch*)Param;
-	DWORD dwLen = sizeof(DWORD) + sizeof(WCHAR)*(lstrlenW(path) + 1 + lstrlenW(pfd->cFileName) + 1);
+	DWORD dwLen = sizeof(DWORD) + sizeof(TCHAR)*(lstrlenW(path) + 1 + lstrlenW(pfd->cFileName) + 1);
 	FindFile*pFindFile = (FindFile*)malloc(dwLen);
 
 	pFindFile->dwFileAttribute = pFindFile->dwFileAttribute;
@@ -62,21 +58,21 @@ void OnFoundFile(wchar_t* path, WIN32_FIND_DATAW* pfd, LPVOID Param)
 	lstrcatW(pFindFile->szFileName, L"\n");
 	lstrcatW(pFindFile->szFileName, pfd->cFileName);
 
-	pMgrSearch->Send(FILE_MGR_SEARCH_FOUND, (char*)pFindFile, dwLen);
+	pMgrSearch->SendMsg(FILE_MGR_SEARCH_FOUND, (char*)pFindFile, dwLen);
 	free(pFindFile);
 	//printf("OnFoundFile OK!");
 }
 void OnSearchOver(LPVOID Param)
 {
 	CFileMgrSearch*pMgrSearch = (CFileMgrSearch*)Param;
-	pMgrSearch->Send(FILE_MGR_SEARCH_OVER, 0, 0);
+	pMgrSearch->SendMsg(FILE_MGR_SEARCH_OVER, 0, 0);
 }
 
 void CFileMgrSearch::OnSearch(char*Buffer)
 {
-	WCHAR*szStartLocation = (WCHAR*)Buffer;
+	TCHAR*szStartLocation = (TCHAR*)Buffer;
 
-	WCHAR*szFileName = wcsstr((WCHAR*)Buffer, L"\n");
+	TCHAR*szFileName = wcsstr((TCHAR*)Buffer, L"\n");
 	if (!szFileName)
 		return;
 	*szFileName++ = NULL;

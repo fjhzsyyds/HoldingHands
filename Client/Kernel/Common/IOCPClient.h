@@ -3,6 +3,7 @@
 #include <WinSock2.h>
 #include <MSWSock.h>
 #include <stdio.h>
+#include <string>
 #include <ASSERT.H>
 #define IO_CONNECT			0
 #define IO_READ				1
@@ -10,8 +11,11 @@
 #define IO_CLOSE			3
 //--------------------------------------------------------
 
+
+using std::string;
+
 class CPacket;
-class CEventHandler;
+class CManager;
 
 struct OVERLAPPEDPLUS
 {
@@ -36,6 +40,7 @@ struct OVERLAPPEDPLUS
 #define HEART_BEAT		0x00abcdef
 class CIOCPClient
 {
+	friend class CManager;
 public:
 	static LPFN_CONNECTEX lpfnConnectEx;
 
@@ -49,15 +54,6 @@ private:
 
 	//IOCP
 	HANDLE		m_hCompletionPort;	//emmmm还是用一个线程吧,两个太复杂了.
-	//服务器信息
-	char		m_ServerAddr[32];
-	int			m_ServerPort;
-	//---------------------------------------------------------
-	char		m_szPeerAddr[64];
-	USHORT		m_PeerPort;
-	//
-	char		m_szSockAddr[64];
-	USHORT		m_SockPort;
 	//---------------------------------------------------------
 	//socket
 	SOCKET		m_ClientSocket;		//socket
@@ -73,8 +69,12 @@ private:
 	CRITICAL_SECTION	m_csCheck;
 	HANDLE		m_SendPacketOver;
 	//
-	friend class CEventHandler;
-	CEventHandler*   m_pHandler;
+	CManager	* m_pManager;
+
+	///////
+	string			m_sServerAddr;
+	unsigned short m_ServerPort;
+
 	//投递一个ReadIO请求
 	void PostRead();
 	void PostWrite();
@@ -86,11 +86,7 @@ private:
 	//重新连接
 	BOOL TryConnect();
 	//Send data
-	//发送一个包
-	void SendPacket(DWORD command,const char*data, int len);
-	//
-	void Disconnect();
-
+	
 	HANDLE	m_hWorkThreads[2];
 	void	IocpRun();
 	static unsigned int __stdcall WorkThread(void*);
@@ -99,16 +95,14 @@ public:
 	static BOOL SocketInit();
 	static void SocketTerm();
 	//
-	void GetPeerName(char* Addr, USHORT&Port);
-	void GetSockName(char* Addr, USHORT&Port);
-	void GetSrvName(char*Addr, USHORT&Port);
+	//发送一个包
+	void SendPacket(DWORD command, const char*data, int len,DWORD dwFlag);
+	void Disconnect();
 
-
-	BOOL BindHandler(CEventHandler*pHandler);
-	BOOL UnbindHandler();
 	void Run();
 	//
-	CIOCPClient(const char*ServerAddr, int ServerPort, BOOL bReConnect = FALSE, UINT MaxTryCount = INFINITE);
+	CIOCPClient(CManager*pManager, const char*ServerAddr, int ServerPort = 10086, 
+		BOOL bReConnect = FALSE, UINT MaxTryCount = INFINITE);
 	~CIOCPClient();
 };
 

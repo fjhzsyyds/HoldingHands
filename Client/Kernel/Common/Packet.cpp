@@ -41,13 +41,3 @@ BOOL CPacket::AllocateMem(DWORD BodyLen)
 	return m_pBuffer != NULL;
 }
 
-
-void CPacket::Encrypt(DWORD dwOffset, DWORD dwLen)
-{
-	DWORD dwEnd = dwOffset + dwLen;
-	DWORD dwKeyLen = lstrlenA(KEY);
-	
-	for (int i = dwOffset; i <dwEnd; i++){
-		m_pBuffer[i] ^= KEY[i%dwKeyLen];
-	}
-}

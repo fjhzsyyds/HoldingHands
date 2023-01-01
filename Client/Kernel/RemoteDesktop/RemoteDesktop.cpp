@@ -7,8 +7,8 @@
 
 #include <WinUser.h>
 
-CRemoteDesktop::CRemoteDesktop():
-CEventHandler(REMOTEDESKTOP)
+CRemoteDesktop::CRemoteDesktop(CManager*pManager):
+CMsgHandler(pManager,REMOTEDESKTOP)
 {
 	m_dwLastTime = 0;
 	m_dwFrameSize = 0;
@@ -52,14 +52,10 @@ void CRemoteDesktop::OnClose()
 	//	m_hWorkThread = NULL;
 	//}
 }
-void CRemoteDesktop::OnConnect()
+void CRemoteDesktop::OnOpen()
 {
 }
 
-void CRemoteDesktop::OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer)
-{
-
-}
 
 #define WM_REMOTE_DESKTOP_SET_CLIPBOARD_TEXT	(WM_USER + 72)
 
@@ -200,9 +196,9 @@ void CRemoteDesktop::ClipdListenProc(CRemoteDesktop*pThis)
 	free(pMyData);
 	pMyData = NULL;
 }
-void CRemoteDesktop::OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer)
+void CRemoteDesktop::OnReadMsg(WORD Msg,DWORD dwSize ,char*Buffer)
 {
-	switch (Event)
+	switch (Msg)
 	{
 	case REMOTEDESKTOP_NEXT_FRAME:
 		OnNextFrame();
@@ -235,7 +231,7 @@ void CRemoteDesktop::OnSetClipbdText(char*szText)
 }
 void CRemoteDesktop::SetClipbdText(char*szText)
 {
-	Send(REMOTEDESKTOP_SET_CLIPBOARDTEXT,szText,lstrlenA(szText)+1);
+	SendMsg(REMOTEDESKTOP_SET_CLIPBOARDTEXT,szText,lstrlenA(szText)+1);
 }
 
 void CRemoteDesktop::OnSetFlag(DWORD dwFlag){
@@ -250,17 +246,17 @@ void CRemoteDesktop::OnSetFlag(DWORD dwFlag){
 
 void CRemoteDesktop::OnGetSize()
 {
-	WCHAR szError[] = L"desktop grab init failed!";
+	TCHAR szError[] = L"desktop grab init failed!";
 	DWORD buff[2];
 	
 	if (FALSE == m_grab.GrabInit()){
-		Send(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(WCHAR) * (lstrlenW(szError) + 1)));
-		Disconnect();
+		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (lstrlenW(szError) + 1)));
+		Close();
 		return;
 	}
 	//Send Video Size
 	m_grab.GetDesktopSize(buff, buff + 1);
-	Send(REMOTEDESKTOP_DESKSIZE, (char*)buff, sizeof(DWORD) * 2);
+	SendMsg(REMOTEDESKTOP_DESKSIZE, (char*)buff, sizeof(DWORD) * 2);
 
 	//剪切板监听线程:
 	m_ClipbdListenerThread = CreateThread(0,0,(LPTHREAD_START_ROUTINE)ClipdListenProc,this,0,0);
@@ -268,8 +264,8 @@ void CRemoteDesktop::OnGetSize()
 	//立刻开始编码
 	m_dwLastTime = GetTickCount();
 	if (!m_grab.GetFrame(&m_FrameBuffer, &m_dwFrameSize,m_dwCaptureFlags)){
-		Send(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(WCHAR) * (wcslen(szError) + 1)));
-		Disconnect();
+		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (wcslen(szError) + 1)));
+		Close();
 	}
 
 	//m_bStopCapture = FALSE;
@@ -282,7 +278,7 @@ void CRemoteDesktop::OnGetSize()
 */
 //void CALLBACK CRemoteDesktop::DesktopGrabThread(CRemoteDesktop*pThis){
 //	//成功,发送视频大小.
-//	WCHAR szError[] = L"desktop grab failed!";
+//	TCHAR szError[] = L"desktop grab failed!";
 //	DWORD dwLastTime = GetTickCount();
 //
 //	while (true){
@@ -294,7 +290,7 @@ void CRemoteDesktop::OnGetSize()
 //		if (!pThis->m_grab.GetFrame(&pThis->m_FrameBuffer, &pThis->m_dwFrameSize,
 //			pThis->m_dwCaptureFlags)){
 //
-//			pThis->Send(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(WCHAR) * (lstrlenW(szError) + 1)));
+//			pThis->Send(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (lstrlenW(szError) + 1)));
 //			pThis->Disconnect();
 //		}
 //		else{
@@ -309,10 +305,10 @@ void CRemoteDesktop::OnGetSize()
 //}
 void CRemoteDesktop::OnNextFrame()
 {
-	WCHAR szError[] = L"desktop grab failed!";
+	TCHAR szError[] = L"desktop grab failed!";
 	DWORD dwUsedTime;
 	//发送上一帧.
-	Send(REMOTEDESKTOP_FRAME, m_FrameBuffer, m_dwFrameSize);
+	SendMsg(REMOTEDESKTOP_FRAME, m_FrameBuffer, m_dwFrameSize);
 	//防止太快.
 	while (GetTickCount() - m_dwLastTime < (1000 / m_dwMaxFps))
 		Sleep(1);
@@ -320,8 +316,8 @@ void CRemoteDesktop::OnNextFrame()
 	m_dwLastTime = GetTickCount();
 	if (!m_grab.GetFrame(&m_FrameBuffer, &m_dwFrameSize,m_dwCaptureFlags)){
 		printf("get frame failed!\n");
-		Send(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(WCHAR) * (wcslen(szError) + 1)));
-		Disconnect();
+		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (wcslen(szError) + 1)));
+		Close();
 	}
 }
 void CRemoteDesktop::OnSetMaxFps(DWORD dwMaxFps){
@@ -340,31 +336,40 @@ void CRemoteDesktop::OnControl(CtrlParam*pParam)
 		break;
 		//鼠标移动
 	case WM_MOUSEMOVE:
-		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE, LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
+		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MOVE, LOWORD(pParam->Param.dwCoor), 
+			HIWORD(pParam->Param.dwCoor), 0, 0);
 		break;
 		//左键操作
 	case WM_LBUTTONDOWN:
-		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN, LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
+		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN, LOWORD(pParam->Param.dwCoor), 
+			HIWORD(pParam->Param.dwCoor), 0, 0);
 		break;
 	case WM_LBUTTONUP:
-		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTUP, LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
+		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTUP, LOWORD(pParam->Param.dwCoor),
+			HIWORD(pParam->Param.dwCoor), 0, 0);
 		break;
 	case WM_LBUTTONDBLCLK:
-		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN|MOUSEEVENTF_LEFTUP, LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
+		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN|MOUSEEVENTF_LEFTUP,
+			LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
 		Sleep(100);
-		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP, LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
+		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP, 
+			LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
 		break;
 		//右键操作
 	case WM_RBUTTONDOWN:
-		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_RIGHTDOWN, LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
+		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_RIGHTDOWN, LOWORD(pParam->Param.dwCoor),
+			HIWORD(pParam->Param.dwCoor), 0, 0);
 		break;
 	case WM_RBUTTONUP:
-		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_RIGHTUP, LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
+		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_RIGHTUP, LOWORD(pParam->Param.dwCoor), 
+			HIWORD(pParam->Param.dwCoor), 0, 0);
 		break;
 	case WM_RBUTTONDBLCLK:
-		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_RIGHTDOWN|MOUSEEVENTF_RIGHTUP, LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
+		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_RIGHTDOWN|MOUSEEVENTF_RIGHTUP, 
+			LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
 		Sleep(100);
-		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_RIGHTDOWN | MOUSEEVENTF_RIGHTUP, LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
+		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_RIGHTDOWN | MOUSEEVENTF_RIGHTUP,
+			LOWORD(pParam->Param.dwCoor), HIWORD(pParam->Param.dwCoor), 0, 0);
 		break;
 		//中键操作
 	case WM_MBUTTONDOWN:

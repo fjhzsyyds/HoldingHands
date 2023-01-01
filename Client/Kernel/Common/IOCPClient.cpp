@@ -1,22 +1,22 @@
 #include "IOCPClient.h"
 #include "Packet.h"
-#include "EventHandler.h"
+#include "..\Common\Manager.h"
 #include <PROCESS.H>
 
 #pragma comment(lib,"ws2_32.lib")
 
-CIOCPClient::CIOCPClient(const char*ServerAddr, int ServerPort, BOOL bReConnect, UINT MaxTryCount)
+CIOCPClient::CIOCPClient(CManager*pManager,const char*ServerAddr, int ServerPort,
+	BOOL bReConnect, UINT MaxTryCount):
+	
+	m_isConnecting(FALSE),
+	m_bReConnect(bReConnect),
+	m_MaxTryCount(MaxTryCount),
+	m_sServerAddr(ServerAddr),
+	m_ServerPort(ServerPort),
+	m_pManager(pManager),
+	m_ClientSocket(INVALID_SOCKET)
 {
-	//自动重新连接
-	m_isConnecting = FALSE;
-	m_bReConnect = bReConnect;
-	m_MaxTryCount = MaxTryCount;
 
-	//服务器信息
-	lstrcpyA(m_ServerAddr, ServerAddr);
-	m_ServerPort = ServerPort;
-	//
-	m_ClientSocket = INVALID_SOCKET;
 	//
 	m_dwRead = 0;
 	m_wsaReadBuf.buf = 0;
@@ -26,57 +26,33 @@ CIOCPClient::CIOCPClient(const char*ServerAddr, int ServerPort, BOOL bReConnect,
 	//
 	m_hCompletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 2);
 
-	m_pHandler = 0;
 	InitializeCriticalSection(&m_csCheck);
 }
 
 CIOCPClient::~CIOCPClient()
 {
 	//
-	if (m_ClientSocket != INVALID_SOCKET)
-	{
+	if (m_ClientSocket != INVALID_SOCKET){
 		closesocket(m_ClientSocket);
 		m_ClientSocket = INVALID_SOCKET;
 	}
 	//
 	//
-	if (m_SendPacketOver != NULL)
-	{
+	if (m_SendPacketOver != NULL){
 		CloseHandle(m_SendPacketOver);
 		m_SendPacketOver = NULL;
 	}
 	//
-	if (m_hCompletionPort != NULL)
-	{
+	if (m_hCompletionPort != NULL){
 		CloseHandle(m_hCompletionPort);
 		m_hCompletionPort = NULL;
 	}
-	//
-	m_pHandler = NULL;
-
 	DeleteCriticalSection(&m_csCheck);
 }
 
-BOOL CIOCPClient::BindHandler(CEventHandler*pHandler)
-{
-	if (m_pHandler != NULL)
-		return FALSE;
-	m_pHandler =  pHandler;
-	m_pHandler->m_pClient = this;
-	return TRUE;
-}
-
-BOOL CIOCPClient::UnbindHandler()
-{
-	if (m_pHandler == NULL)
-		return FALSE;
-	m_pHandler->m_pClient = NULL;
-	m_pHandler = NULL;
-	return TRUE;
-}
 void CIOCPClient::Run()
 {
-	if (m_hCompletionPort == NULL || m_pHandler == NULL 
+	if (m_hCompletionPort == NULL || m_pManager == NULL 
 		|| m_SendPacketOver == NULL){
 		return;
 	}
@@ -89,9 +65,10 @@ BOOL CIOCPClient::SocketInit()
 	WORD			RequestedVersion = MAKEWORD(2, 2);
 	//初始化WinSock
 	if (SOCKET_ERROR == WSAStartup(RequestedVersion, &wsadata)){
-		wprintf(L"WSAStartup failed with error: %u\n", WSAGetLastError());
+		wprintf(TEXT("WSAStartup failed with error: %u\n"), WSAGetLastError());
 		return FALSE;
 	}
+	wprintf(TEXT("WSAStartup Success\n"), WSAGetLastError());
 	return TRUE;
 }
 
@@ -118,21 +95,17 @@ BOOL CIOCPClient::TryConnect()
 	GUID			GuidConnectEx = WSAID_CONNECTEX;
 	DWORD			dwBytes;
 	SOCKET			temp;
-	
 	//printf("TryConnect!\n");
-	//先获取ConnectEx指针
-	if (lpfnConnectEx == NULL)
-	{
+	if (lpfnConnectEx == NULL){
 		iResult = INVALID_SOCKET;
 		temp = socket(AF_INET, SOCK_STREAM, NULL);
-		if (temp != INVALID_SOCKET)
-		{
-			iResult = WSAIoctl(temp, SIO_GET_EXTENSION_FUNCTION_POINTER, &GuidConnectEx, sizeof(GuidConnectEx),
+		if (temp != INVALID_SOCKET){
+			iResult = WSAIoctl(temp, SIO_GET_EXTENSION_FUNCTION_POINTER,
+				&GuidConnectEx, sizeof(GuidConnectEx),
 				&lpfnConnectEx, sizeof(lpfnConnectEx), &dwBytes, NULL, NULL);
 			closesocket(temp);
 
 			if (iResult == SOCKET_ERROR){
-				//printf("WSAIoctl failed with error: %u\n", WSAGetLastError());
 				WSACleanup();
 				return FALSE;
 			}
@@ -141,8 +114,7 @@ BOOL CIOCPClient::TryConnect()
 	if (lpfnConnectEx == NULL)
 		return FALSE;
 	//上一次连接失败后,不会关闭socket,可以继续使用
-	if (m_ClientSocket == INVALID_SOCKET)
-	{
+	if (m_ClientSocket == INVALID_SOCKET){
 		m_ClientSocket = socket(AF_INET, SOCK_STREAM, 0);
 		if (m_ClientSocket == INVALID_SOCKET)
 			return FALSE;
@@ -151,22 +123,23 @@ BOOL CIOCPClient::TryConnect()
 		local.sin_family = AF_INET;
 		local.sin_addr.S_un.S_addr = INADDR_ANY;
 		local.sin_port = 0;
-		if (SOCKET_ERROR == bind(m_ClientSocket, (LPSOCKADDR)&local, sizeof(local)))
-		{
+
+		if (SOCKET_ERROR == bind(m_ClientSocket, (LPSOCKADDR)&local, sizeof(local))){
 			closesocket(m_ClientSocket);
 			m_ClientSocket = INVALID_SOCKET;
 			return FALSE;
 		}
 		//把这个socket 绑定到完成端口
-		if (m_hCompletionPort != CreateIoCompletionPort((HANDLE)m_ClientSocket, m_hCompletionPort, NULL, 0))
-		{
+		if (m_hCompletionPort != CreateIoCompletionPort(
+			(HANDLE)m_ClientSocket, m_hCompletionPort, NULL, 0)){
+
 			closesocket(m_ClientSocket);
 			m_ClientSocket = INVALID_SOCKET;
 			return FALSE;
 		}//
 	}
 	//获取目标主机ip
-	HOSTENT*pHost = gethostbyname(m_ServerAddr);
+	HOSTENT*pHost = gethostbyname(m_sServerAddr.c_str());
 	SOCKADDR_IN ServerAddr = { 0 };
 	ServerAddr.sin_family = AF_INET;
 	memcpy(&ServerAddr.sin_addr.S_un.S_addr, pHost->h_addr, 4);
@@ -176,10 +149,11 @@ BOOL CIOCPClient::TryConnect()
 	//-------------------------Post Connect------------------------ 
 	OVERLAPPEDPLUS*pOverlapped = new OVERLAPPEDPLUS(IO_CONNECT);
 	//int ret = connect(m_ClientSocket, (sockaddr*)&ServerAddr, sizeof(ServerAddr));
-	BOOL bResult = lpfnConnectEx(m_ClientSocket, (sockaddr*)&ServerAddr, sizeof(ServerAddr),&m_pHandler->m_Identity,4,NULL, (OVERLAPPED*)pOverlapped);
+	BOOL bResult = lpfnConnectEx(m_ClientSocket, (sockaddr*)&ServerAddr,
+		sizeof(ServerAddr),NULL,0,NULL, (OVERLAPPED*)pOverlapped);
+
 	int Error = WSAGetLastError();
-	if (FALSE == bResult && Error != WSA_IO_PENDING)
-	{
+	if (FALSE == bResult && Error != WSA_IO_PENDING){
 #ifdef _DEBUG
 		printf("SOCKET :%u\n", m_ClientSocket);
 		printf("WSAGetLastError : %d \n", WSAGetLastError());
@@ -203,11 +177,8 @@ unsigned int __stdcall CIOCPClient::WorkThread(void*Param)
 	
 	//some module will use 
 	CoInitialize(NULL);
-
-	while (bLoop)
-	{
-		for (;;)
-		{
+	while (bLoop){
+		for (;;){
 			dwTransferBytes = 0;
 			ulCompletionKey = 0;
 			pOverlapped = NULL;
@@ -216,20 +187,21 @@ unsigned int __stdcall CIOCPClient::WorkThread(void*Param)
 			bResult = GetQueuedCompletionStatus(hCompletionPort, &dwTransferBytes, &ulCompletionKey, 
 				(LPOVERLAPPED*)&pOverlapped, INFINITE);
 			//退出线程.
-			if (ulCompletionKey == INVALID_SOCKET)
-			{
+			if (ulCompletionKey == INVALID_SOCKET){
 				bLoop = FALSE;
 				break;
 			}
-			//-------------------------------处理IO消息-----------------------------
+			//-----------  IO Message Handler ----------- 
 			bEOF = ((!bResult) || (!dwTransferBytes) || pOverlapped->m_bManualPost);
 
 			if (pOverlapped->m_IOtype == IO_CONNECT)
 			{
+
 				int seconds = 0;
 				int bytes = sizeof(seconds);
 				int iResult = 0;
-				if (!bResult || pOverlapped->m_bManualPost || dwTransferBytes != 4) {		//ConnectEx失败
+				if (!bResult || pOverlapped->m_bManualPost) {		//ConnectEx失败
+					
 					break;
 				}
 				//Update properties;
@@ -237,12 +209,6 @@ unsigned int __stdcall CIOCPClient::WorkThread(void*Param)
 				//-------------------------------
 				pClient->OnConnect();
 				//-------------------------------
-				//begin recv data:
-				pClient->m_wsaReadBuf.buf = pClient->m_ReadPacket.GetBuffer();
-				pClient->m_wsaReadBuf.len = PACKET_HEADER_LEN;
-				pClient->m_dwRead = 0;
-				//Post first read,then the socket will continuously process the read completion statu.;
-				pClient->PostRead();
 			}
 			else if (pOverlapped->m_IOtype == IO_READ){
 				pClient->OnReadComplete(dwTransferBytes, bEOF);
@@ -260,8 +226,7 @@ unsigned int __stdcall CIOCPClient::WorkThread(void*Param)
 			if (pOverlapped) delete pOverlapped;
 		}
 		//不退出线程.
-		if (bLoop)
-		{
+		if (bLoop){
 			//连接失败或者断开连接会执行这里
 			if (pClient->m_isConnecting)
 				pClient->m_FailedCount++;
@@ -275,8 +240,7 @@ unsigned int __stdcall CIOCPClient::WorkThread(void*Param)
 			}
 			else{
 				//Sleep(1000 * ( (rand()%60) + 60 ));
-				Sleep(10000);
-				
+				Sleep(10000);	
 				//重新发起连接.
 				pClient->TryConnect();
 			}
@@ -297,8 +261,7 @@ void CIOCPClient::IocpRun()
 		m_hWorkThreads[i] = (HANDLE)_beginthreadex(0, 0, WorkThread, (LPVOID)this, 0, 0);
 
 	//失败,直接退出.
-	if (FALSE == TryConnect())
-	{
+	if (FALSE == TryConnect()){
 		for (i = 0; i < 2;i++)
 			PostQueuedCompletionStatus(m_hCompletionPort, 0, (ULONG_PTR)INVALID_SOCKET, 0);
 	}
@@ -309,27 +272,27 @@ void CIOCPClient::IocpRun()
 			break;
 		//超时了.
 		if (m_ClientSocket != INVALID_SOCKET && !m_isConnecting){
-			BOOL bHeartBeatReply = InterlockedExchange((volatile long*)&m_bHeartBeatReply, FALSE);
+			BOOL bHeartBeatReply = 
+				InterlockedExchange((volatile long*)&m_bHeartBeatReply, FALSE);
 			if (!bHeartBeatReply){
+				printf("Not Recv Heartbeat ,Time out....\n");
 				Disconnect();
 			}
 			else{
-				SendPacket(HEART_BEAT, 0, 0);
+				SendPacket(HEART_BEAT, 0, 0, 0);
 			}
 		}
 	}
-
 	//清理工作
 	for (i = 0; i < 2; i++)
 		CloseHandle(m_hWorkThreads[i]);
 }
 
 //发送包.
-void CIOCPClient::SendPacket(DWORD command,const char*data, int len)
+void CIOCPClient::SendPacket(DWORD command, const char*data, int len,DWORD dwFlag = 0)
 {
 	//等待上一个包发送完毕.
-	for (;;)
-	{
+	for (;;){
 		DWORD dwResult = WaitForSingleObject(m_SendPacketOver, 500);
 		if (dwResult == WAIT_TIMEOUT && m_ClientSocket == INVALID_SOCKET)
 			return;
@@ -337,21 +300,19 @@ void CIOCPClient::SendPacket(DWORD command,const char*data, int len)
 			break;
 	}
 	
-	if (FALSE == m_WritePacket.AllocateMem(len))
-	{
+	if (FALSE == m_WritePacket.AllocateMem(len)){
 		SetEvent(m_SendPacketOver);//发送失败
 		return ;
 	}
+
 	//Set Header
-	m_WritePacket.SetHeader(len, command);
+	m_WritePacket.SetHeader(len, command, dwFlag);
 	//Copy Data.
 	memcpy(m_WritePacket.GetBody(), data, len);
 	//发送Header:
 	m_dwWrite = 0;
 	m_wsaWriteBuf.buf = m_WritePacket.GetBuffer();
 	m_wsaWriteBuf.len = m_WritePacket.GetBodyLen() + PACKET_HEADER_LEN;
-
-	//m_WritePacket.Encrypt(0,m_wsaWriteBuf.len);
 	PostWrite();
 }
 
@@ -362,14 +323,15 @@ void CIOCPClient::OnWriteComplete(DWORD nTransferredBytes, BOOL bEOF)
 		m_dwWrite += nTransferredBytes;
 		//发完心跳包忽略处理.
 		if (m_dwWrite == m_WritePacket.GetBodyLen() + PACKET_HEADER_LEN){
-			if (m_WritePacket.GetCommand()!=HEART_BEAT)
-				m_pHandler->OnWriteComplete(m_WritePacket.GetCommand(), m_WritePacket.GetBodyLen(), 
-				m_dwWrite, m_WritePacket.GetBody());
+			if (m_WritePacket.GetCommand() != HEART_BEAT){
+				m_pManager->ProcessCompletedPacket(PACKET_WRITE_COMPLETED, &m_WritePacket);
+
+			}
 		}
 		else if (m_dwWrite < m_WritePacket.GetBodyLen() + PACKET_HEADER_LEN){
 			if (m_dwWrite > PACKET_HEADER_LEN && m_WritePacket.GetCommand() != HEART_BEAT){
-				m_pHandler->OnWritePartial(m_WritePacket.GetCommand(), m_WritePacket.GetBodyLen(),
-					m_dwWrite, m_WritePacket.GetBody());
+				/*m_pHandler->OnWritePartial(m_WritePacket.GetCommand(), m_WritePacket.GetBodyLen(),
+					m_dwWrite, m_WritePacket.GetBody());*/
 			}
 			m_wsaWriteBuf.buf = m_WritePacket.GetBuffer() + m_dwWrite;
 			m_wsaWriteBuf.len = m_WritePacket.GetBodyLen() + PACKET_HEADER_LEN - m_dwWrite;
@@ -386,12 +348,10 @@ void CIOCPClient::OnWriteComplete(DWORD nTransferredBytes, BOOL bEOF)
 //ReadIO请求完成
 void CIOCPClient::OnReadComplete(DWORD nTransferredBytes, BOOL bEOF)
 {
-	if (bEOF)
-	{
+	if (bEOF){
 		m_dwRead = 0;
 		return;
 	}
-	//m_ReadPacket.Encrypt(m_dwRead,nTransferredBytes);
 	//成功,有数据到达：
 	m_dwRead += nTransferredBytes;
 	//读取完毕
@@ -406,43 +366,35 @@ void CIOCPClient::OnReadComplete(DWORD nTransferredBytes, BOOL bEOF)
 			m_bHeartBeatReply = TRUE;
 		}
 		else{
-
-			WORD Event = m_ReadPacket.GetCommand();
-			DWORD dwTotal = m_ReadPacket.GetBodyLen();						//buffer总长度
-			DWORD dwRead = m_dwRead - PACKET_HEADER_LEN;					//已经读取的长度
-			m_pHandler->OnReadComplete(Event, dwTotal, dwRead, m_ReadPacket.GetBody());
+			m_pManager->ProcessCompletedPacket(PACKET_READ_COMPLETED,&m_ReadPacket);
 		}
 		m_dwRead = 0;
 	}
 	//先把PacketHeader接收完
-	if (m_dwRead < PACKET_HEADER_LEN)
-	{
+	if (m_dwRead < PACKET_HEADER_LEN){
 		m_wsaReadBuf.buf = m_ReadPacket.GetBuffer();
 		m_wsaReadBuf.len = PACKET_HEADER_LEN - m_dwRead;
 	}
-	else
-	{
+	else{
 		BOOL bOk = m_ReadPacket.Verify();
 		BOOL bMemEnough = TRUE;
 		//为空，先分配相应内存,在这之前先校验头部是否正确
-		if (bOk)
-		{
+		if (bOk){
 			bMemEnough = m_ReadPacket.AllocateMem(m_ReadPacket.GetBodyLen());
 		}
-		if (bOk && m_dwRead > PACKET_HEADER_LEN)
-		{
+		if (bOk && m_dwRead > PACKET_HEADER_LEN){
 			//处理完成的包
-			WORD Event = m_ReadPacket.GetCommand();
+			/*WORD Event = m_ReadPacket.GetCommand();
 			DWORD dwTotal = m_ReadPacket.GetBodyLen();
-			DWORD dwRead = m_dwRead - PACKET_HEADER_LEN;
-			m_pHandler->OnReadPartial(Event, dwTotal, dwRead, m_ReadPacket.GetBody());
+			DWORD dwRead = m_dwRead - PACKET_HEADER_LEN;*/
+
+			//m_pHandler->OnReadPartial(Event, dwTotal, dwRead, m_ReadPacket.GetBody());
 		}
 		//如果bOk且，内存分配成功，最后会重新赋值，否则下一次Post会断开这个客户的连接
 		m_wsaReadBuf.buf = NULL;
 		m_wsaReadBuf.len = 0;
 		//内存可能分配失败
-		if (bOk && bMemEnough)
-		{
+		if (bOk && bMemEnough){
 			//设置偏移
 			m_wsaReadBuf.buf = m_ReadPacket.GetBuffer() + m_dwRead;
 			//计算剩余长度
@@ -465,8 +417,7 @@ void CIOCPClient::PostRead()
 	nIORet = WSARecv(m_ClientSocket, &m_wsaReadBuf, 1, &nReadBytes, &flag, (LPOVERLAPPED)pOverlapped, NULL);
 	nErrorCode = WSAGetLastError();
 	//IO错误,该SOCKET被关闭了,或者buff为NULL;
-	if (nIORet == SOCKET_ERROR	&& nErrorCode != WSA_IO_PENDING)
-	{
+	if (nIORet == SOCKET_ERROR	&& nErrorCode != WSA_IO_PENDING){
 		//将这个标记为手动投递的
 		pOverlapped->m_bManualPost = TRUE;
 		PostQueuedCompletionStatus(m_hCompletionPort, 0, 0, (LPOVERLAPPED)pOverlapped);
@@ -486,18 +437,17 @@ void CIOCPClient::PostWrite()
 	nIORet = WSASend(m_ClientSocket, &m_wsaWriteBuf, 1, &nWriteBytes, flag, (LPOVERLAPPED)pOverlapped, NULL);
 	nErrorCode = WSAGetLastError();
 	//IO错误,该SOCKET被关闭了,或者buff为NULL;
-	if (nIORet == SOCKET_ERROR	&& nErrorCode != WSA_IO_PENDING)
-	{
+	if (nIORet == SOCKET_ERROR	&& nErrorCode != WSA_IO_PENDING){
 		pOverlapped->m_bManualPost = TRUE;
 		PostQueuedCompletionStatus(m_hCompletionPort, 0, 0, (LPOVERLAPPED)pOverlapped);
 	}
 	LeaveCriticalSection(&m_csCheck);
 }
-void CIOCPClient::OnClose()
-{
+
+void CIOCPClient::OnClose(){
 	//等待Write完成.
 	WaitForSingleObject(m_SendPacketOver, INFINITE);
-	m_pHandler->OnClose();
+	m_pManager->ProcessCompletedPacket(PACKET_CLIENT_DISCONNECT,NULL);
 }
 
 void CIOCPClient::OnConnect()
@@ -507,44 +457,14 @@ void CIOCPClient::OnConnect()
 	//设置初始值为TRUE;
 	InterlockedExchange((volatile long*)&m_bHeartBeatReply, TRUE);
 	SetEvent(m_SendPacketOver);	
-
-	//保存sockaddr和peer addr
-	m_PeerPort = 0;
-	m_SockPort = 0;
-
-	m_szPeerAddr[0] = 0;
-	m_szSockAddr[0] = 0;
-
-	sockaddr_in addr = { 0 };
-	int namelen = sizeof(addr);
-	//本地
-	getsockname(m_ClientSocket, (sockaddr*)&addr, &namelen);
-	lstrcpyA(m_szSockAddr, inet_ntoa(addr.sin_addr));
-	m_SockPort = addr.sin_port;
-	//对方
-	namelen = sizeof(addr);
-	getpeername(m_ClientSocket, (sockaddr*)&addr, &namelen);
-	lstrcpyA(m_szPeerAddr, inet_ntoa(addr.sin_addr));
-	m_PeerPort = addr.sin_port;
 	//交给Handler处理。
 	printf("CIOCPClient::OnConnect()\n");
-
-	m_pHandler->OnConnect();
-}
-
-void CIOCPClient::GetPeerName(char* Addr, USHORT&Port)
-{
-	Port = m_PeerPort;
-	lstrcpyA(Addr, m_szPeerAddr);
-}
-void CIOCPClient::GetSockName(char* Addr, USHORT&Port)
-{
-	Port = m_SockPort;
-	lstrcpyA(Addr, m_szSockAddr);
-}
-
-void CIOCPClient::GetSrvName(char*Addr, USHORT&Port)
-{
-	Port = m_ServerPort;
-	lstrcpyA(Addr, m_ServerAddr);
+	m_pManager->ProcessCompletedPacket(PACKET_CLIENT_CONNECT,NULL);
+	//
+	//begin recv data:
+	m_wsaReadBuf.buf = m_ReadPacket.GetBuffer();
+	m_wsaReadBuf.len = PACKET_HEADER_LEN;
+	m_dwRead = 0;
+	//Post first read,then the socket will continuously process the read completion statu.;
+	PostRead();
 }

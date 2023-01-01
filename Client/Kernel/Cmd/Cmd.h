@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 #define CMD				('C'|('M')<<8|('D')<<16)
 
@@ -10,7 +10,7 @@
 #define CMD_RESULT		(0xcad2)
 
 class CCmd :
-	public CEventHandler
+	public CMsgHandler
 {
 public:
 	HANDLE		m_hReadThread;		
@@ -22,15 +22,15 @@ public:
 
 	PROCESS_INFORMATION m_pi;
 	void OnClose();		
-	void OnConnect();
+	void OnOpen();
 
-	void OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer);
+	void OnWriteMsg(WORD, DWORD, char*){}
+	void OnReadMsg(WORD Msg,DWORD dwSize, char*Buffer);
 
 	int CmdBegin();
 
 	void OnCommand(char*szCmd);
-	CCmd();
+	CCmd(CManager*pManager);
 	~CCmd();
 };
 

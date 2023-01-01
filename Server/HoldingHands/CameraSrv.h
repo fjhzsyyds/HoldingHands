@@ -1,6 +1,9 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 #include "resource.h"
+#include<string>
+
+using std::string;
 
 extern"C"
 {
@@ -29,7 +32,7 @@ extern"C"
 class CCameraDlg;
 
 class CCameraSrv :
-	public CEventHandler
+	public CMsgHandler
 {
 private:
 	CCameraDlg*	m_pDlg;
@@ -44,26 +47,29 @@ private:
 	HDC					m_hMemDC;
 	void*				m_Buffer;
 
-	BOOL	CameraInit(DWORD dwHeight, DWORD dwWidth);
+	int	CameraInit(int width, int height);
 	void	CameraTerm();
 public:
-	void OnConnect();
+	void OnOpen();
 	void OnClose();
-	void OnReadComplete(WORD Event, DWORD Total, DWORD dwRead, char*Buffer);
+	
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer) {};
+
 
 	void OnFrame(char*Buffer, DWORD dwLen);
-	void OnVideoSize(DWORD dwVideoSize[]);
+	void OnVideoSize(int code,string&err,int width,int height);
 	void OnStopOk();
 	void OnDeviceList(char*DeviceList);
 	void OnScreenShot();
 
 
-	void Start(int idx,DWORD dwWidth,DWORD dwHeight);
+	void Start(const string& device, int dwFormat,int bitcount, int dwWidth, int dwHeight);
 	void Stop();
 	void ScreenShot();
 	void OnError(WCHAR*szError);
 
-	CCameraSrv(DWORD dwIdentity);
+	CCameraSrv(CManager*pManager);
 	~CCameraSrv();
 };
 

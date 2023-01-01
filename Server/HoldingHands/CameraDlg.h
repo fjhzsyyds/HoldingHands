@@ -1,5 +1,16 @@
 #pragma once
+
+#include <string>
+#include <map>
+#include <list>
 #include "afxwin.h"
+
+
+using std::string;
+using std::map;
+using std::list;
+using std::pair;
+
 
 #define WM_CAMERA_DEVICELIST (WM_USER+352)
 #define WM_CAMERA_ERROR		(WM_USER+353)
@@ -11,26 +22,9 @@
 // CCameraDlg ¶Ô»°¿ò
 
 class CCameraSrv;
-
-
-
+typedef map <string, map<DWORD, map<DWORD,list<pair<int, int>>>>> VideoInfoList;
 class CCameraDlg : public CDialogEx
 {
-	struct DeviceInfo
-	{
-		WCHAR			m_szDeviceName[128];
-		CList<CString>*	m_pVideoSizes;
-		~DeviceInfo()
-		{
-			if (m_pVideoSizes)
-				delete m_pVideoSizes;
-		}
-		DeviceInfo()
-		{
-			m_pVideoSizes = new CList<CString>;
-		}
-	};
-
 	DECLARE_DYNAMIC(CCameraDlg)
 
 public:
@@ -46,9 +40,7 @@ protected:
 	DECLARE_MESSAGE_MAP()
 public:
 	HDC			m_hdc;
-
 	DWORD		m_dwFps;
-
 	DWORD		m_dwLastTime;
 
 	DWORD		m_dwWidth;
@@ -57,13 +49,17 @@ public:
 	DWORD		m_dwOrgX;
 	DWORD		m_dwOrgY;
 
+	CRect		m_minVideoSize;
+
 	CString m_Title;
 
 	CCameraSrv*	m_pHandler;
+
+	CComboBox m_FormatList;
 	CComboBox m_DeviceList;
 	CComboBox m_VideoSizeList;
 
-	CList<DeviceInfo*>	m_Devices;
+	VideoInfoList		m_device;
 
 	afx_msg void OnBnClickedOk();
 	afx_msg void OnBnClickedButton1();
@@ -81,4 +77,8 @@ public:
 	afx_msg void OnCbnSelchangeCombo1();
 	afx_msg void OnBnClickedButton2();
 	afx_msg void OnSize(UINT nType, int cx, int cy);
+	
+	afx_msg void OnCbnSelchangeCombo3();
+	CComboBox m_BitCount;
+	afx_msg void OnCbnSelchangeCombo4();
 };

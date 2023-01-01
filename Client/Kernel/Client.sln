@@ -19,6 +19,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FileManager", "FileManager\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FileDownloader", "FileDownloader\FileDownloader.vcxproj", "{AA687B7A-ADBA-4002-ACE6-9682CCA72852}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "KeyLogger", "KeyLogger\KeyLogger.vcxproj", "{F2313B9A-EFD3-43B2-8A06-ED75C12358A6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -57,6 +59,10 @@ Global
 		{AA687B7A-ADBA-4002-ACE6-9682CCA72852}.Debug|Win32.Build.0 = Debug|Win32
 		{AA687B7A-ADBA-4002-ACE6-9682CCA72852}.Release|Win32.ActiveCfg = Release|Win32
 		{AA687B7A-ADBA-4002-ACE6-9682CCA72852}.Release|Win32.Build.0 = Release|Win32
+		{F2313B9A-EFD3-43B2-8A06-ED75C12358A6}.Debug|Win32.ActiveCfg = Debug|Win32
+		{F2313B9A-EFD3-43B2-8A06-ED75C12358A6}.Debug|Win32.Build.0 = Debug|Win32
+		{F2313B9A-EFD3-43B2-8A06-ED75C12358A6}.Release|Win32.ActiveCfg = Release|Win32
+		{F2313B9A-EFD3-43B2-8A06-ED75C12358A6}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

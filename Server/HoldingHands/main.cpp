@@ -7,6 +7,7 @@ DWORD interval;
 char Text[64];
 
 DWORD AcceptCount = 0;
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	wchar_t Text[256];
@@ -15,7 +16,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 		CIOCPServer::SocketInit();
 		pS = CIOCPServer::CreateServer(hWnd);
-		pS->AsyncStartSvr(10086);
+		pS->AsyncStartSrv(10086);
 		SetTimer(hWnd, 10086, 1000, NULL);
 		break;
 	case WM_IOCPSVR_START:
@@ -32,7 +33,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_CLOSE:
 		//DestroyWindow(hWnd);
-		pS->AsyncStopSvr();
+		pS->AsyncStopSrv();
 		//CIOCPServer::SocketTerm();
 		printf("The server has been stoped!\n");
 		//PostQuitMessage(0);
@@ -57,14 +58,15 @@ int main()
 	wndclass.lpfnWndProc = WndProc;
 
 	RegisterClass(&wndclass);
-	HWND hWnd = CreateWindow(L"IOCPServerTest", L"IOCP", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT, 500,600, 0, 0, hInstance, 0);
+	HWND hWnd = CreateWindow(L"IOCPServerTest",
+		L"IOCP", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+		CW_USEDEFAULT, CW_USEDEFAULT, 500,600, 0, 0, hInstance, 0);
 
 	ShowWindow(hWnd, SW_SHOW);
 	UpdateWindow(hWnd);
 	MSG msg;
 
-	while (GetMessage(&msg, 0, 0, 0))
-	{
+	while (GetMessage(&msg, 0, 0, 0)){
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}

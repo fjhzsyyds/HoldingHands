@@ -74,7 +74,7 @@ unsigned int __stdcall CSearchFile::WorkerThread(void*Param)
 	//
 	SEARCH_THREAD_CONTEXT*pSearchThreadContext = (SEARCH_THREAD_CONTEXT*)Param;
 	MSG msg;
-	WCHAR*pCurDir = NULL, *pFirstFileName = NULL, *pTemp = NULL;
+	TCHAR*pCurDir = NULL, *pFirstFileName = NULL, *pTemp = NULL;
 	DWORD CurDirNameLen = 0, NameLen = 0;
 	BOOL bFindNextRet = NULL;
 	HANDLE hFirst = NULL;
@@ -90,9 +90,9 @@ unsigned int __stdcall CSearchFile::WorkerThread(void*Param)
 		if (msg.wParam == NULL)
 			goto Notification;						//给主线程发送请求
 
-		pCurDir = (WCHAR*)msg.wParam;
+		pCurDir = (TCHAR*)msg.wParam;
 		CurDirNameLen = lstrlenW(pCurDir);
-		pFirstFileName = (WCHAR*)malloc(sizeof(WCHAR)* (CurDirNameLen + 3));
+		pFirstFileName = (TCHAR*)malloc(sizeof(TCHAR)* (CurDirNameLen + 3));
 		lstrcpyW(pFirstFileName, pCurDir);
 		*(pFirstFileName + CurDirNameLen) = L'\\';
 		*(pFirstFileName + CurDirNameLen + 1) = L'*';
@@ -113,7 +113,7 @@ unsigned int __stdcall CSearchFile::WorkerThread(void*Param)
 				{
 					NameLen = lstrlenW(fd.cFileName);
 
-					pTemp = (WCHAR*)malloc(sizeof(WCHAR) * (CurDirNameLen + 1 + NameLen + 1));
+					pTemp = (TCHAR*)malloc(sizeof(TCHAR) * (CurDirNameLen + 1 + NameLen + 1));
 
 					lstrcpyW(pTemp, pCurDir);
 					*(pTemp + CurDirNameLen) = L'\\';
@@ -188,7 +188,7 @@ void CSearchFile::MasterThread(CSearchFile*pThis)
 			{
 				 //第一个目录入栈
 				int StartDirLen = lstrlenW(pThis->m_DestFile.StartDir);
-				LPWSTR StartDir = (WCHAR*)malloc(sizeof(WCHAR) * (StartDirLen + 1));
+				LPWSTR StartDir = (TCHAR*)malloc(sizeof(TCHAR) * (StartDirLen + 1));
 
 				lstrcpyW(StartDir, pThis->m_DestFile.StartDir);
 				pThis->Push(StartDir);
@@ -261,7 +261,7 @@ void CSearchFile::MasterThread(CSearchFile*pThis)
 }
 
 
-void CSearchFile::Push(WCHAR*pDir)
+void CSearchFile::Push(TCHAR*pDir)
 {
 	do 
 	{
