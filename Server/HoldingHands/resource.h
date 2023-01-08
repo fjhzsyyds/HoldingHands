@@ -46,10 +46,11 @@
 #define IDC_EDIT1                       1000
 #define IDC_TRANS_PROGRESS              1001
 #define IDC_EDIT3                       1001
-#define IDC_SZIE_PROGRESS               1002
-#define IDC_COUNT_PROGRESS              1003
+#define IDC_TOTAL_PROGRESS              1002
 #define IDC_CURRENT_FILE                1004
 #define IDC_DOWNLOAD_PROGRESS           1005
+#define IDC_CURRENT_FILE2               1005
+#define IDC_CURRENT_PROGRESS            1005
 #define IDC_MFCSHELLTREE1               1006
 #define IDC_MFCSHELLLIST1               1007
 #define IDC_EDIT2                       1010

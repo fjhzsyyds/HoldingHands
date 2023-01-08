@@ -18,9 +18,10 @@ IMPLEMENT_DYNAMIC(CFileManagerDlg, CDialogEx)
 
 CFileManagerDlg::CFileManagerDlg(CFileManagerSrv*pHandler, CWnd* pParent /*=NULL*/)
 	: CDialogEx(CFileManagerDlg::IDD, pParent)
-	, m_Location(_T(""))
+	, m_Location(_T("")),
+	m_pHandler(pHandler),
+	m_DestroyAfterDisconnect(FALSE)
 {
-	m_pHandler = pHandler;
 }
 
 CFileManagerDlg::~CFileManagerDlg()
@@ -55,9 +56,7 @@ BEGIN_MESSAGE_MAP(CFileManagerDlg, CDialogEx)
 	ON_COMMAND(ID_UPLOAD_FROMDISK, &CFileManagerDlg::OnUploadFromdisk)
 	ON_COMMAND(ID_UPLOAD_FROMURL, &CFileManagerDlg::OnUploadFromurl)
 	ON_COMMAND(ID_MENU_DOWNLOAD, &CFileManagerDlg::OnMenuDownload)
-	ON_MESSAGE(WM_FMDLG_PREV_DOWNLOAD,OnPrevDownload)
-	ON_MESSAGE(WM_FMDLG_PREV_UPLOAD_FROMDISK, OnPrevUploadFromDisk)
-	ON_MESSAGE(WM_FMDLG_PREV_UPLOAD_FROMURL, OnPrevUploadFromUrl)
+
 	ON_MESSAGE(WM_FMDLG_NEWFOLDER_SUCCESS, OnNewfolderSuccess)
 	ON_COMMAND(ID_RUNFILE_HIDE, &CFileManagerDlg::OnRunfileHide)
 	ON_COMMAND(ID_RUNFILE_NORMAL, &CFileManagerDlg::OnRunfileNormal)
@@ -68,6 +67,8 @@ BEGIN_MESSAGE_MAP(CFileManagerDlg, CDialogEx)
 	ON_COMMAND(ID_MENU_CUT, &CFileManagerDlg::OnMenuCut)
 	ON_COMMAND(ID_MENU_PASTE, &CFileManagerDlg::OnMenuPaste)
 	ON_NOTIFY(LVN_ENDLABELEDIT, IDC_LIST1, &CFileManagerDlg::OnLvnEndlabeleditList1)
+	ON_MESSAGE(WM_FMDLG_ERROR,OnError)
+	ON_WM_NCDESTROY()
 END_MESSAGE_MAP()
 
 
@@ -77,6 +78,7 @@ HIMAGELIST CFileManagerDlg::hImageList_SmallIcon = NULL;
 HIMAGELIST CFileManagerDlg::hImageList_LargeIcon = NULL; 
 CImageList* CFileManagerDlg::pLargeImageList = NULL;
 CImageList* CFileManagerDlg::pSmallImageList = NULL;
+
 
 BOOL CFileManagerDlg::OnInitDialog()
 {
@@ -147,10 +149,11 @@ BOOL CFileManagerDlg::OnInitDialog()
 	m_FileList.ModifyStyle(LVS_TYPEMASK, LVS_REPORT);
 	//Set Title.
 	CString Title;
+
 	auto const peer = m_pHandler->GetPeerName();
 	Title.Format(L"[%s] FileManager", CA2W(peer.first.c_str()).m_psz);
+	
 	SetWindowText(Title);
-
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常:  OCX 属性页应返回 FALSE
 }
@@ -183,14 +186,44 @@ void CFileManagerDlg::Resize()
 	GetDlgItem(IDC_STATIC)->MoveWindow(&ClientRect);
 }
 
+/*
+2 种清空
+	
+	使 Dlg 一定比 pHandler迟销毁...
+
+*/
+
+LRESULT CFileManagerDlg::OnError(WPARAM wParam, LPARAM lParam){
+	TCHAR * szError = (TCHAR*)wParam;
+	MessageBox(szError, TEXT("Error"), MB_OK | MB_ICONINFORMATION);
+	return 0;
+}
+
+void CFileManagerDlg::PostNcDestroy()
+{
+	// TODO:  在此添加专用代码和/或调用基类
+	CDialogEx::PostNcDestroy();
+	if (!m_DestroyAfterDisconnect){
+		delete this;
+	}
+}
+
+
 void CFileManagerDlg::OnClose()
 {
 	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	if (m_pHandler){
+		m_DestroyAfterDisconnect = TRUE;
 		m_pHandler->Close();
-		m_pHandler = NULL;
+	}
+	else{
+		//m_pHandler已经没了,现在只管自己就行.
+		DestroyWindow();
 	}
 }
+
+
+
 void CFileManagerDlg::OnToolbarDropDown(NMHDR *pnmhdr, LRESULT *plr)
 {
 	LPNMTOOLBAR pnmtb = reinterpret_cast<LPNMTOOLBAR>(pnmhdr);
@@ -230,15 +263,17 @@ void CFileManagerDlg::OnViewList()
 void CFileManagerDlg::OnUp()
 {
 	//禁用窗口,请求目录
-	GetDlgItem(IDC_EDIT1)->EnableWindow(FALSE);
-	m_FileList.EnableWindow(FALSE);
-	//上一层目录.s
-	m_pHandler->Up();
+	if (m_pHandler){
+		GetDlgItem(IDC_EDIT1)->EnableWindow(FALSE);
+		m_FileList.EnableWindow(FALSE);
+		//上一层目录.s
+		m_pHandler->Up();
+	}
 }
+
 LRESULT CFileManagerDlg::OnChDir(WPARAM Statu, LPARAM CurLocation)
 {
-	if (!Statu)
-	{
+	if (!Statu){
 		MessageBox(L"Access Failed!");
 		m_FileList.EnableWindow(TRUE);
 		GetDlgItem(IDC_EDIT1)->EnableWindow(TRUE);
@@ -393,6 +428,10 @@ void CFileManagerDlg::OnNMDblclkList1(NMHDR *pNMHDR, LRESULT *pResult)
 	if (m_Location.GetLength() && !(m_FileList.GetItemData(pNMItemActivate->iItem) & FILE_ATTRIBUTE_DIRECTORY))
 		return;
 
+	if (m_pHandler == nullptr){
+		return;
+	}
+
 	//禁用窗口,请求目录
 	GetDlgItem(IDC_EDIT1)->EnableWindow(FALSE);
 	m_FileList.EnableWindow(FALSE);
@@ -402,6 +441,7 @@ void CFileManagerDlg::OnNMDblclkList1(NMHDR *pNMHDR, LRESULT *pResult)
 		CString NewDir = m_Location;
 		NewDir += "\\";
 		NewDir += m_FileList.GetItemText(pNMItemActivate->iItem, 0);
+
 		m_pHandler->ChDir(NewDir.GetBuffer());
 	}
 	else
@@ -411,6 +451,7 @@ void CFileManagerDlg::OnNMDblclkList1(NMHDR *pNMHDR, LRESULT *pResult)
 		szRoot[0] = m_FileList.GetItemData(pNMItemActivate->iItem);
 		szRoot[1] = ':';
 		szRoot[2] = '\\';
+		
 		m_pHandler->ChDir(szRoot);
 	}
 }
@@ -436,70 +477,41 @@ void CFileManagerDlg::OnNMRClickList1(NMHDR *pNMHDR, LRESULT *pResult)
 */
 
 void CFileManagerDlg::OnUploadFromdisk(){
-
-	m_pHandler->PrevUploadFromDisk();
-}
-void CFileManagerDlg::OnUploadFromurl(){
-	m_pHandler->PrevUploadFromUrl();
-}
-
-void CFileManagerDlg::OnMenuDownload(){
-	m_pHandler->PrevDownload();
-}
-
-void CFileManagerDlg::OnMenuRename(){
-	if (m_FileList.GetSelectedCount() == 0)
+	if (!m_Location.GetLength())
 		return ;
-	//只重命名一个.
-	POSITION pos = m_FileList.GetFirstSelectedItemPosition();
-	if (pos){
-		int idx = m_FileList.GetNextSelectedItem(pos);
-		m_FileList.EditLabel(idx);
+
+	CFileSelectDlg dlg(this);
+	if (IDOK != dlg.DoModal() ||
+		dlg.m_FileList.GetLength() == 0){
+		return ;
 	}
+	//对方开启MINIFileTrans模块.
+	if (m_pHandler)
+		m_pHandler->UploadFromDisk(dlg.m_FileList.GetBuffer());
+
+	return ;
 }
 
-void CFileManagerDlg::OnMenuNewfolder(){
-	m_pHandler->NewFolder();
-}
-
-//
-LRESULT CFileManagerDlg::OnPrevUploadFromUrl(WPARAM wParam, LPARAM lParam)
-{
+void CFileManagerDlg::OnUploadFromurl(){
 	// TODO:  在此添加命令处理程序代码
 	if (!m_Location.GetLength())
-		return 0;
+		return;
 	//如果此时窗口对象被delete 掉会崩掉.
 	//DestroyWindow会关掉窗口极其所有的子窗口.
 	//就相当于是调用DestroyWindow关闭了DoModal的窗口.
 	CUrlInputDlg dlg(this);
-	if (IDOK != dlg.DoModal() || 
+	if (IDOK != dlg.DoModal() ||
 		dlg.m_Url.GetLength() == 0){
-		return 0;
+		return;
 	}
 	//对方开启MINIDownload模块.
-	m_pHandler->UploadFromUrl(dlg.m_Url.GetBuffer());
-	return 0;
+	if (m_pHandler)
+		m_pHandler->UploadFromUrl(dlg.m_Url.GetBuffer());
 }
 
-LRESULT CFileManagerDlg::OnPrevUploadFromDisk(WPARAM wParam, LPARAM lParam)
-{
-	if (!m_Location.GetLength())
-		return 0;
-
-	CFileSelectDlg dlg(this);
-	if (IDOK != dlg.DoModal() || 
-		dlg.m_FileList.GetLength() == 0){
-		return 0;
-	}
-	//对方开启MINIFileTrans模块.
-	m_pHandler->UploadFromDisk(dlg.m_FileList.GetBuffer());
-	return 0;
-}
-
-LRESULT CFileManagerDlg::OnPrevDownload(WPARAM wParam, LPARAM lParam)
-{
+void CFileManagerDlg::OnMenuDownload(){
 	if (!m_Location.GetLength() || m_FileList.GetSelectedCount() == 0)
-		return 0;
+		return ;
 	//
 	TCHAR szPathName[MAX_PATH] = { 0 };
 	BROWSEINFO bInfo = { 0 };
@@ -509,7 +521,7 @@ LRESULT CFileManagerDlg::OnPrevDownload(WPARAM wParam, LPARAM lParam)
 	LPITEMIDLIST lpDlist;
 	lpDlist = SHBrowseForFolder(&bInfo);
 	if (NULL == lpDlist){ // 单击了确定按钮;
-		return 0;
+		return;
 	}
 	SHGetPathFromIDList(lpDlist, szPathName);
 	CString s;
@@ -524,9 +536,28 @@ LRESULT CFileManagerDlg::OnPrevDownload(WPARAM wParam, LPARAM lParam)
 		s += m_FileList.GetItemText(idx, 0);
 		s += L"\n";
 	}
-	m_pHandler->Download(s.GetBuffer());
-	return 0;
+	if (m_pHandler)
+		m_pHandler->Download(s.GetBuffer());
 }
+
+void CFileManagerDlg::OnMenuRename(){
+	if (m_FileList.GetSelectedCount() == 0)
+		return ;
+	//只重命名一个.
+	POSITION pos = m_FileList.GetFirstSelectedItemPosition();
+	if (pos){
+		int idx = m_FileList.GetNextSelectedItem(pos);
+		m_oldFileName = m_FileList.GetItemText(idx, 0);	
+		m_FileList.EditLabel(idx);
+	}
+}
+
+void CFileManagerDlg::OnMenuNewfolder(){
+	m_FileList.SetFocus();
+	if (m_pHandler)
+		m_pHandler->NewFolder();
+}
+
 
 void CFileManagerDlg::OnRunfileHide()
 {
@@ -541,7 +572,10 @@ void CFileManagerDlg::OnRunfileHide()
 		Files += m_FileList.GetItemText(idx, 0);
 		Files += L"\n";
 	}
-	m_pHandler->RunFileHide(Files.GetBuffer());
+
+	if (m_pHandler)
+		m_pHandler->RunFileHide(Files.GetBuffer());
+
 }
 
 
@@ -558,7 +592,9 @@ void CFileManagerDlg::OnRunfileNormal()
 		Files += m_FileList.GetItemText(idx, 0);
 		Files += L"\n";
 	}
-	m_pHandler->RunFileNormal(Files.GetBuffer());
+
+	if (m_pHandler)
+		m_pHandler->RunFileNormal(Files.GetBuffer());
 }
 
 
@@ -569,7 +605,8 @@ void CFileManagerDlg::OnGo()
 	GetDlgItem(IDC_EDIT1)->EnableWindow(FALSE);
 	m_FileList.EnableWindow(FALSE);
 	//修改目录就行
-	m_pHandler->ChDir(m_Location.GetBuffer());
+	if (m_pHandler)
+		m_pHandler->ChDir(m_Location.GetBuffer());
 }
 
 void CFileManagerDlg::OnRefresh()
@@ -578,7 +615,8 @@ void CFileManagerDlg::OnRefresh()
 	GetDlgItem(IDC_EDIT1)->EnableWindow(FALSE);
 	m_FileList.EnableWindow(FALSE);
 	//修改目录就行
-	m_pHandler->Refresh();
+	if (m_pHandler)
+		m_pHandler->Refresh();
 }
 
 
@@ -589,6 +627,7 @@ LRESULT	CFileManagerDlg::OnNewfolderSuccess(WPARAM wParam, LPARAM lParam)
 
 	//添加项目.
 	AddItem(idx, pis);
+	m_oldFileName = pis->szFileName;
 	m_FileList.EditLabel(idx);
 	return 0;
 }
@@ -614,7 +653,9 @@ void CFileManagerDlg::OnMenuDelete()
 		s += m_FileList.GetItemText(idx, 0);
 		s += L"\n";
 	}
-	m_pHandler->Delete(s.GetBuffer());
+	if (m_pHandler)
+		m_pHandler->Delete(s.GetBuffer());
+
 	//刷新一下
 	OnRefresh();
 }
@@ -633,7 +674,9 @@ void CFileManagerDlg::OnMenuCopy()
 		s += m_FileList.GetItemText(idx, 0);
 		s += "\n";
 	}
-	m_pHandler->Copy(s.GetBuffer());
+	if (m_pHandler)
+		m_pHandler->Copy(s.GetBuffer());
+	
 }
 
 
@@ -651,7 +694,9 @@ void CFileManagerDlg::OnMenuCut()
 		s += m_FileList.GetItemText(idx, 0);
 		s += "\n";
 	}
-	m_pHandler->Cut(s.GetBuffer());
+	if (m_pHandler)
+		m_pHandler->Cut(s.GetBuffer());
+	
 }
 
 
@@ -660,14 +705,16 @@ void CFileManagerDlg::OnMenuPaste()
 	// TODO:  在此添加命令处理程序代码
 	if (m_Location.GetLength() == 0)
 		return;
-	m_pHandler->Paste();
+	if (m_pHandler)
+		m_pHandler->Paste();
 	OnRefresh();
 }
 
 
 void CFileManagerDlg::OnSearch()
 {
-	m_pHandler->Search();
+	if (m_pHandler)
+		m_pHandler->Search();
 }
 
 
@@ -685,7 +732,18 @@ void CFileManagerDlg::OnLvnEndlabeleditList1(NMHDR *pNMHDR, LRESULT *pResult)
 		m_FileList.GetEditControl()->GetWindowText(strNewFileName);
 		s += strNewFileName;
 		//
-		m_pHandler->Rename(s.GetBuffer());
-		OnRefresh();
+		if (strNewFileName != m_oldFileName){
+			if (m_pHandler)
+				m_pHandler->Rename(s.GetBuffer());
+
+			OnRefresh();
+		}
 	}
+}
+
+
+
+
+void CFileManagerDlg::OnCancel()
+{
 }

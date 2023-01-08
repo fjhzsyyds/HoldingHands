@@ -20,8 +20,11 @@ extern "C" __declspec(dllexport) void  ModuleEntry(char* szServerAddr,
 	delete pManager;
 }
 
+
+#ifdef _DEBUG
 int main(){
 	CIOCPClient::SocketInit();
 	ModuleEntry("127.0.0.1", 10086);
 	CIOCPClient::SocketTerm();
 }
+#endif

@@ -12,6 +12,7 @@
 #include "json\json.h"
 #include "utils.h"
 
+
 #ifdef DEBUG
 #pragma comment(lib,"jsond.lib")
 #else
@@ -33,14 +34,13 @@ CCameraDlg::CCameraDlg(CCameraSrv*pHandler, CWnd* pParent /*=NULL*/)
 	m_dwFps(0),
 	m_dwLastTime(0),
 	m_dwOrgX(0),
-	m_dwOrgY(0)
+	m_dwOrgY(0),
+	m_DestroyAfterDisconnect(FALSE)
 {
 }
 
 CCameraDlg::~CCameraDlg()
 {
-	/*while (m_Devices.GetCount())
-		delete m_Devices.RemoveHead();*/
 }
 
 void CCameraDlg::DoDataExchange(CDataExchange* pDX)
@@ -54,13 +54,11 @@ void CCameraDlg::DoDataExchange(CDataExchange* pDX)
 
 
 BEGIN_MESSAGE_MAP(CCameraDlg, CDialogEx)
-	ON_BN_CLICKED(IDOK, &CCameraDlg::OnBnClickedOk)
 	ON_BN_CLICKED(IDC_BUTTON1, &CCameraDlg::OnBnClickedButton1)
 	ON_MESSAGE(WM_CAMERA_DEVICELIST,OnDeviceList)
 	ON_MESSAGE(WM_CAMERA_ERROR,OnError)
 	ON_MESSAGE(WM_CAMERA_FRAME,OnFrame)
 	ON_MESSAGE(WM_CAMERA_VIDEOSIZE,OnVideoSize)
-	ON_MESSAGE(WM_CAMERA_SCREENSHOT,OnScreenShot)
 	ON_MESSAGE(WM_CAMERA_STOP_OK,OnStopOk)
 	ON_WM_CLOSE()
 	ON_CBN_SELCHANGE(IDC_COMBO1, &CCameraDlg::OnCbnSelchangeCombo1)
@@ -74,10 +72,6 @@ END_MESSAGE_MAP()
 // CCameraDlg 消息处理程序
 
 
-void CCameraDlg::OnBnClickedOk()
-{
-}
-
 
 void CCameraDlg::OnBnClickedButton1()
 {
@@ -86,7 +80,7 @@ void CCameraDlg::OnBnClickedButton1()
 	pCtrl->GetWindowTextW(Text);
 
 	//
-	if (Text == "Start"){
+	if (Text == TEXT("Start")){
 		if (m_DeviceList.GetCount() == 0 ||
 			m_FormatList.GetCount() == 0 ||
 			m_BitCount.GetCount() == 0 ||
@@ -99,16 +93,18 @@ void CCameraDlg::OnBnClickedButton1()
 		DWORD dwBitCount;
 		pair<int, int> size;
 
-		m_DeviceList.GetWindowTextW(deivce);
+		m_DeviceList.GetWindowText(deivce);
 		dwFormat = m_FormatList.GetItemData(m_FormatList.GetCurSel());
 		dwBitCount = m_BitCount.GetItemData(m_BitCount.GetCurSel());
 		size = *(pair<int, int>*)m_VideoSizeList.GetItemData(m_VideoSizeList.GetCurSel());
 		//
-		m_pHandler->Start(CW2A(deivce).m_psz, dwFormat, dwBitCount, size.first, size.second);
+		if (m_pHandler)
+			m_pHandler->Start(CW2A(deivce).m_psz, dwFormat, dwBitCount, size.first, size.second);
 	}
-	else{
+	else if(m_pHandler){
 		m_pHandler->Stop();
 	}
+
 	pCtrl->EnableWindow(FALSE);
 }
 
@@ -170,7 +166,7 @@ BOOL CCameraDlg::OnInitDialog()
 	m_hdc = ::GetDC(pVideo->m_hWnd);
 	auto const peer = m_pHandler->GetPeerName();
 
-	m_Title.Format(L"[%s] Camera", CA2W(peer.first.c_str()).m_psz);
+	m_Title.Format(TEXT("[%s] Camera"), CA2W(peer.first.c_str()).m_psz);
 	SetWindowText(m_Title);
 
 	SetTextColor(m_hdc, 0x000033ff);
@@ -203,21 +199,40 @@ LRESULT CCameraDlg::OnError(WPARAM wParam, LPARAM lParam)
 	GetDlgItem(IDC_BUTTON1)->EnableWindow(TRUE);
 
 	//失败
-	CString err = CA2W((char*)wParam);
-	MessageBox(err);
+	TCHAR*szError = (TCHAR*)wParam;
+	MessageBox(szError,TEXT("Error"),MB_OK|MB_ICONINFORMATION);
 	return 0;
 }
+
+
+
+void CCameraDlg::PostNcDestroy()
+{
+	// TODO:  在此添加专用代码和/或调用基类
+
+	CDialogEx::PostNcDestroy();
+
+	if (!m_DestroyAfterDisconnect){
+		delete this;
+	}
+}
+
 
 void CCameraDlg::OnClose()
 {
 	// TODO:  在此添加消息处理程序代码和/或调用默认值
-	if (m_pHandler){
-		m_pHandler->Close();
-		m_pHandler = NULL;
-	}
 	if (m_hdc){
 		::ReleaseDC(GetDlgItem(IDC_VIDEO)->m_hWnd, m_hdc);
 		m_hdc = NULL;
+	}
+	// TODO:  在此添加消息处理程序代码和/或调用默认值
+	if (m_pHandler){
+		m_DestroyAfterDisconnect = TRUE;
+		m_pHandler->Close();
+	}
+	else{
+		//m_pHandler已经没了,现在只管自己就行.
+		DestroyWindow();
 	}
 }
 
@@ -395,48 +410,21 @@ LRESULT CCameraDlg::OnStopOk(WPARAM wParam, LPARAM lParam)
 
 void CCameraDlg::OnBnClickedButton2()
 {
-	m_pHandler->ScreenShot();
-}
-
-LRESULT CCameraDlg::OnScreenShot(WPARAM wParam, LPARAM lParam)
-{
-	if (m_dwHeight == 0 || m_dwWidth == 0)
-		return 0;
-	//
-	HBITMAP hBmp;
-	BITMAP bmp;
-	BITMAPINFOHEADER bi = { 0 };
+	DWORD dwBmpSize;
 	LPVOID Buffer = NULL;
-	HDC hMdc;
 
-	hMdc = CreateCompatibleDC(m_hdc);
-	hBmp = CreateCompatibleBitmap(m_hdc, m_dwWidth, m_dwHeight);
-	SelectObject(hMdc, hBmp);
-	BitBlt(hMdc, 0, 0, m_dwWidth, m_dwHeight, m_hdc, m_dwOrgX, m_dwOrgY, SRCCOPY);
+	if (m_dwHeight == 0 || m_dwWidth == 0 || m_pHandler == NULL)
+		return;
 
-	GetObject(hBmp, sizeof(BITMAP), &bmp);
-	bi.biSize = sizeof(BITMAPINFOHEADER);
-	bi.biWidth = bmp.bmWidth;
-	bi.biHeight = bmp.bmHeight;
-	bi.biPlanes = 1;
-	bi.biBitCount = 24;
-	bi.biCompression = BI_RGB;
+	Buffer = m_pHandler->GetBmpFile(&dwBmpSize);
 
-	DWORD dwBmpSize = ((bmp.bmWidth * bi.biBitCount + 31) / 32) * 4 * bmp.bmHeight;
-	DWORD dwSizeofDIB = dwBmpSize + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
-	
-	BITMAPFILEHEADER bmfHeader = { 0 };
-	Buffer = new char[dwBmpSize]; // malloc(dwBmpSize);
-
-	int Result = GetDIBits(hMdc, hBmp, 0, bmp.bmHeight, Buffer, (BITMAPINFO*)&bi, DIB_RGB_COLORS);
-
-	bmfHeader.bfType = 0x4D42;
-	bmfHeader.bfOffBits = (DWORD)sizeof(BITMAPFILEHEADER) + (DWORD)sizeof(BITMAPINFOHEADER);
-	bmfHeader.bfSize = dwSizeofDIB;
+	if (!Buffer){
+		return;
+	}
 
 	CString FileName;
 	CTime Time = CTime::GetTickCount();
-	FileName.Format(L"%s.bmp", Time.Format(L"%Y-%m-%d_%H_%M_%S").GetBuffer());
+	FileName.Format(TEXT("\\%s.bmp"), Time.Format(L"%Y-%m-%d_%H_%M_%S").GetBuffer());
 
 	CMainFrame * pMainWnd = (CMainFrame*)AfxGetMainWnd();
 	CConfig & config = pMainWnd->getConfig();
@@ -444,6 +432,7 @@ LRESULT CCameraDlg::OnScreenShot(WPARAM wParam, LPARAM lParam)
 	CString SavePath = CA2W(val.c_str());
 
 	SavePath += FileName;
+
 	if (SavePath[1] != ':'){
 		CString csCurrentDir;
 		csCurrentDir.Preallocate(MAX_PATH);
@@ -454,26 +443,22 @@ LRESULT CCameraDlg::OnScreenShot(WPARAM wParam, LPARAM lParam)
 	MakesureDirExist(SavePath, TRUE);
 	HANDLE hFile = CreateFile(SavePath, GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	CString err;
-	if (hFile != INVALID_HANDLE_VALUE)
-	{
-		DWORD dwWrite = 0;
-		WriteFile(hFile, &bmfHeader, sizeof(bmfHeader), &dwWrite, NULL);
-		WriteFile(hFile, &bi, sizeof(bi), &dwWrite, NULL);
-		WriteFile(hFile, Buffer, dwBmpSize, &dwWrite, NULL);
-
-		CloseHandle(hFile);
-		err = TEXT("success!");
-	}
-	else{
+	if (hFile == INVALID_HANDLE_VALUE){
 		err.Format(TEXT("CreateFile failed with error: %d"), GetLastError());
 	}
-	MessageBox(err);
 
-	delete [] Buffer;
-	DeleteObject(hBmp);
-	DeleteDC(hMdc);	
-	return 0;
+	if (hFile != INVALID_HANDLE_VALUE){
+		DWORD dwWrite = 0;
+		WriteFile(hFile, Buffer, dwBmpSize, &dwWrite, NULL);
+		CloseHandle(hFile);
+
+		err.Format(TEXT("Image has been save to %s"), SavePath);
+	}
+
+	delete[] Buffer;
+	MessageBox(err, TEXT("Tips"), MB_OK | MB_ICONINFORMATION);
 }
+
 
 void CCameraDlg::OnSize(UINT nType, int cx, int cy)
 {
@@ -481,3 +466,14 @@ void CCameraDlg::OnSize(UINT nType, int cx, int cy)
 }
 
 
+
+
+
+void CCameraDlg::OnOK()
+{
+}
+
+
+void CCameraDlg::OnCancel()
+{
+}

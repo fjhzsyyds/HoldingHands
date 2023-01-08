@@ -2,41 +2,48 @@
 #include "CameraSrv.h"
 #include "CameraDlg.h"
 #include "json\json.h"
+#include "utils.h"
 
 CCameraSrv::CCameraSrv(CManager*pManager) :
-	CMsgHandler(pManager)
+	CMsgHandler(pManager),
+	m_pDlg(NULL),
+	m_pCodec(NULL),
+	m_pCodecContext(NULL),
+	m_hBmp(NULL),
+	m_hMemDC(NULL),
+	m_Buffer(NULL)
 {
-	m_pDlg = NULL;
-	
-	m_pCodec = NULL;
-	m_pCodecContext = NULL;
-	
-	m_hBmp = NULL;
-	m_hMemDC = NULL;
-	m_Buffer = NULL;
-
 	memset(&m_Bmp, 0, sizeof(m_Bmp));
 	memset(&m_AVPacket, 0, sizeof(m_AVPacket));
 	memset(&m_AVFrame, 0, sizeof(m_AVFrame));
 
+	m_hMutex = CreateEvent(0, TRUE, TRUE, NULL);
 }
 
 
 CCameraSrv::~CCameraSrv()
 {
+	CloseHandle(m_hMutex);
 }
 
 void CCameraSrv::OnClose()
 {
-	if (m_pDlg){
-		m_pDlg->SendMessage(WM_CLOSE, 0, 0);
-		m_pDlg->DestroyWindow();
-
-		delete m_pDlg;
-		m_pDlg = NULL;
-	}
 	CameraTerm();
+	if (m_pDlg){
+		if (m_pDlg->m_DestroyAfterDisconnect){
+			//窗口先关闭的.
+			m_pDlg->DestroyWindow();
+			delete m_pDlg;
+		}
+		else{
+			// pHandler先关闭的,那么就不管窗口了
+			m_pDlg->m_pHandler = nullptr;
+			m_pDlg->PostMessage(WM_CAMERA_ERROR, (WPARAM)TEXT("Disconnect."));
+			m_pDlg = nullptr;
+		}
+	}
 }
+
 void CCameraSrv::OnOpen()
 {
 	m_pDlg = new CCameraDlg(this);
@@ -47,6 +54,8 @@ void CCameraSrv::OnOpen()
 
 	m_pDlg->ShowWindow(SW_SHOW);
 }
+
+
 void CCameraSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
 	switch (Msg)
@@ -70,9 +79,6 @@ void CCameraSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 		break;
 	case CAMERA_FRAME:
 		OnFrame(Buffer, dwSize);
-		break;
-	case CAMERA_SCREENSHOT:
-		OnScreenShot();
 		break;
 	case CAMERA_ERROR:
 		OnError((TCHAR*)Buffer);
@@ -116,6 +122,7 @@ void CCameraSrv::OnStopOk()
 	CameraTerm();
 	m_pDlg->SendMessage(WM_CAMERA_STOP_OK, 0, 0);
 }
+
 int CCameraSrv::CameraInit(int width, int height)
 {
 	CameraTerm();
@@ -155,6 +162,8 @@ Failed:
 	CameraTerm();
 	return -1;
 }
+
+
 void CCameraSrv::CameraTerm()
 {
 	if (m_hMemDC){
@@ -166,26 +175,33 @@ void CCameraSrv::CameraTerm()
 		memset(&m_Bmp, 0, sizeof(m_Bmp));
 		m_hBmp = NULL;
 	}
-	if (m_pCodecContext)
-	{
+	if (m_pCodecContext){
 		avcodec_free_context(&m_pCodecContext);
 		m_pCodecContext = 0;
 	}
+
 	m_pCodec = 0;
 	//AVFrame需要清除
 	av_frame_unref(&m_AVFrame);
-	//
+
 	memset(&m_AVPacket, 0, sizeof(m_AVPacket));
 	memset(&m_AVFrame, 0, sizeof(m_AVFrame));
 }
 
 void CCameraSrv::OnVideoSize(int code, string&err, int width, int height){
 	if (code){
+#ifdef UNICODE
+		wchar_t* error = convertGB2312ToUtf16(err.c_str());
+		m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)error, NULL);
+		delete[] error;
+#else
 		m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)err.c_str(), NULL);
+#endif
 		return;
 	}
+
 	if (CameraInit(width, height)){
-		m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)"CameraSrv Init Failed!", NULL);
+		m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)TEXT("CameraSrv Init Failed!"), NULL);
 		return;
 	}
 
@@ -208,7 +224,10 @@ void CCameraSrv::OnFrame(char*buffer,DWORD dwLen)
 		if (!avcodec_receive_frame(m_pCodecContext, &m_AVFrame)){
 			//成功.
 			//I420 ---> ARGB.
-			libyuv::I420ToARGB(m_AVFrame.data[0], m_AVFrame.linesize[0], m_AVFrame.data[1], m_AVFrame.linesize[1],
+			WaitForSingleObject(m_hMutex, INFINITE);
+
+			libyuv::I420ToARGB(m_AVFrame.data[0], m_AVFrame.linesize[0], 
+				m_AVFrame.data[1], m_AVFrame.linesize[1],
 				m_AVFrame.data[2], m_AVFrame.linesize[2],
 				(uint8_t*)m_Buffer, m_Bmp.bmWidthBytes, m_Bmp.bmWidth, m_Bmp.bmHeight);
 			//显示到窗口上
@@ -216,18 +235,57 @@ void CCameraSrv::OnFrame(char*buffer,DWORD dwLen)
 			return;
 		}
 	}
-	m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)"Decode Frame Failed!", NULL);
+	m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)TEXT("Decode Frame Failed!"), NULL);
 	return;
 }
 
-void CCameraSrv::ScreenShot()
-{
-	SendMsg(CAMERA_SCREENSHOT, 0, 0);
-}
+char * CCameraSrv::GetBmpFile(DWORD * lpDataSize){
+	DWORD dwBitsSize = 0, dwBufferSize = 0;
+	BITMAPINFOHEADER bi = { 0 };
+	BITMAPFILEHEADER bmfHeader = { 0 };
+	char * lpBuffer = NULL;
+	int Result = 0;
 
-void CCameraSrv::OnScreenShot()
-{
-	m_pDlg->SendMessage(WM_CAMERA_SCREENSHOT, 0, 0);
+	if (!m_Bmp.bmHeight || !m_Bmp.bmWidth){
+		return nullptr;
+	}
+
+	bi.biSize = sizeof(BITMAPINFOHEADER);
+	bi.biWidth = m_Bmp.bmWidth;
+	bi.biHeight = m_Bmp.bmHeight;
+	bi.biPlanes = 1;
+	bi.biBitCount = 24;
+	bi.biCompression = BI_RGB;
+
+	dwBitsSize = ((m_Bmp.bmWidth * bi.biBitCount + 31) / 32) * 4 * m_Bmp.bmHeight;
+		
+	dwBufferSize += sizeof(BITMAPFILEHEADER);
+	dwBufferSize += sizeof(BITMAPINFOHEADER);
+	dwBufferSize += dwBitsSize;
+
+	lpBuffer = new char[dwBufferSize];
+
+	bmfHeader.bfType = 0x4D42;
+	bmfHeader.bfOffBits = (DWORD)sizeof(BITMAPFILEHEADER) + (DWORD)sizeof(BITMAPINFOHEADER);
+	bmfHeader.bfSize = dwBufferSize;
+
+	memcpy(lpBuffer, &bmfHeader, sizeof(bmfHeader));
+	memcpy(lpBuffer + sizeof(bmfHeader), &bi, sizeof(bi));
+
+	ResetEvent(m_hMutex);		//lock
+	//get bits 
+	Result = GetDIBits(m_hMemDC, m_hBmp, 0,
+		m_Bmp.bmHeight, lpBuffer + 
+		sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER)
+		, (BITMAPINFO*)&bi, DIB_RGB_COLORS);
+	SetEvent(m_hMutex);			//unlock
+
+	if (Result != m_Bmp.bmHeight){
+		delete[] lpBuffer;
+		return NULL;
+	}
+	*lpDataSize = dwBufferSize;
+	return lpBuffer;
 }
 
 void CCameraSrv::OnError(TCHAR*szError)

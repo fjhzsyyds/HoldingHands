@@ -46,7 +46,7 @@ Return:
 
 static TCHAR* MemUnits[] =
 {
-	TEXT("Byte"),
+	TEXT("B"),
 	TEXT("KB"),
 	TEXT("MB"),
 	TEXT("GB"),

@@ -4,8 +4,8 @@
 
 CFileMgrSearchSrv::CFileMgrSearchSrv(CManager*pManager) :
 	CMsgHandler(pManager)
+	, m_pDlg(nullptr)
 {
-	m_pDlg = NULL;
 }
 
 
@@ -16,17 +16,24 @@ CFileMgrSearchSrv::~CFileMgrSearchSrv()
 void CFileMgrSearchSrv::OnClose()
 {
 	if (m_pDlg){
-		m_pDlg->SendMessage(WM_CLOSE);
-		m_pDlg->DestroyWindow();
-		delete m_pDlg;
-		m_pDlg = NULL;
+		if (m_pDlg->m_DestroyAfterDisconnect){
+			//窗口先关闭的.
+			m_pDlg->DestroyWindow();
+			delete m_pDlg;
+		}
+		else{
+			// pHandler先关闭的,那么就不管窗口了
+			m_pDlg->m_pHandler = nullptr;
+			m_pDlg->PostMessage(WM_FILE_MGR_SEARCH_ERROR, (WPARAM)TEXT("Disconnect."));
+		}
+		m_pDlg = nullptr;
 	}
 }
 void CFileMgrSearchSrv::OnOpen()
 {
 	m_pDlg = new CFileMgrSearchDlg(this);
 
-	if (m_pDlg->Create(IDD_FM_SEARCH_DLG,CWnd::GetDesktopWindow()) == FALSE)
+	if (!m_pDlg->Create(IDD_FM_SEARCH_DLG,CWnd::GetDesktopWindow()))
 	{
 		Close();
 		return;

@@ -125,8 +125,7 @@ void CCamera::OnStop()
 	m_Grab.StopGrab();						//停止捕捉
 	InterlockedExchange(&m_bStop, TRUE);	//停止发送
 
-	if (m_hWorkThread)
-	{
+	if (m_hWorkThread){
 		WaitForSingleObject(m_hWorkThread,INFINITE);		//等待线程退出
 		CloseHandle(m_hWorkThread);
 		m_hWorkThread = NULL;
@@ -153,9 +152,6 @@ void CCamera::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 		break;
 	case CAMERA_STOP:
 		OnStop();
-		break;
-	case CAMERA_SCREENSHOT:
-		SendMsg(CAMERA_SCREENSHOT, 0, 0);
 		break;
 	default:
 		break;

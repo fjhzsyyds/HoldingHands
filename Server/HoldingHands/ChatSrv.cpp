@@ -20,12 +20,11 @@ void CChatSrv::OnOpen()
 {
 	CChatInputName dlg;
 	dlg.DoModal();
-	if (dlg.m_NickName.GetLength() != 0)
-	{
+	if (dlg.m_NickName.GetLength() != 0){
 		lstrcpy(m_szNickName,dlg.m_NickName);
 	}
 	m_pDlg = new CChatDlg(this);
-	if (m_pDlg->Create(IDD_CHAT_DLG,CWnd::GetDesktopWindow()) == FALSE)
+	if (!m_pDlg->Create(IDD_CHAT_DLG,CWnd::GetDesktopWindow()))
 	{
 		Close();
 		return;
@@ -39,11 +38,17 @@ void CChatSrv::OnOpen()
 void CChatSrv::OnClose()
 {
 	if (m_pDlg){
-		m_pDlg->SendMessage(WM_CLOSE);
-		m_pDlg->DestroyWindow();
-
-		delete m_pDlg;
-		m_pDlg = NULL;
+		if (m_pDlg->m_DestroyAfterDisconnect){
+			//窗口先关闭的.
+			m_pDlg->DestroyWindow();
+			delete m_pDlg;
+		}
+		else{
+			// pHandler先关闭的,那么就不管窗口了
+			m_pDlg->m_pHandler = nullptr;
+			m_pDlg->PostMessage(WM_CHATDLG_ERROR, (WPARAM)TEXT("Disconnect."));
+			m_pDlg = nullptr;
+		}
 	}
 }
 
@@ -92,7 +97,7 @@ void CChatSrv::OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer)
 
 }
 
-void CChatSrv::SendMsgMsg(TCHAR*szMsg)
+void CChatSrv::SendMsgText(TCHAR*szMsg)
 {
 	SendMsg(CHAT_MSG, (char*)szMsg, sizeof(TCHAR)*(lstrlen(szMsg) + 1));
 }

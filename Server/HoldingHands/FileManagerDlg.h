@@ -8,12 +8,9 @@
 
 #define WM_FMDLG_TEST	(WM_USER+135)
 
-#define WM_FMDLG_PREV_UPLOAD_FROMDISK	(WM_USER+136)
-#define WM_FMDLG_PREV_UPLOAD_FROMURL	(WM_USER+137)
-#define WM_FMDLG_PREV_DOWNLOAD			(WM_USER+138)
-#define WM_FMDLG_PREV_RENAME			(WM_USER+139)
-
 #define WM_FMDLG_NEWFOLDER_SUCCESS		(WM_USER+140)
+
+#define WM_FMDLG_ERROR					(WM_USER + 141)
 
 // CFileManagerDlg ¶Ô»°¿ò	
 class CFileManagerSrv;
@@ -64,7 +61,10 @@ public:
 	static CImageList	*pSmallImageList;
 
 	CFileManagerSrv*	m_pHandler;
-	
+	BOOL				m_DestroyAfterDisconnect;
+
+	CString m_oldFileName;
+
 	virtual BOOL OnInitDialog();
 	CListCtrl m_FileList;
 	CString m_Location;
@@ -85,10 +85,9 @@ public:
 	afx_msg void OnViewList();
 
 
-
+	afx_msg LRESULT OnError(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnChDir(WPARAM wParam,LPARAM lParam);
 	afx_msg LRESULT OnFillList(WPARAM wParam, LPARAM lParam);
-
 
 	afx_msg void OnUp();
 	afx_msg void OnGo();
@@ -100,10 +99,6 @@ public:
 	afx_msg void OnUploadFromdisk();
 	afx_msg void OnUploadFromurl();
 	afx_msg void OnMenuDownload();
-
-	afx_msg LRESULT OnPrevUploadFromUrl(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnPrevUploadFromDisk(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnPrevDownload(WPARAM wParam, LPARAM lParam);
 
 	afx_msg LRESULT	OnNewfolderSuccess(WPARAM wParam, LPARAM lParam);
 
@@ -119,4 +114,6 @@ public:
 	afx_msg void OnLvnEndlabeleditList1(NMHDR *pNMHDR, LRESULT *pResult);
 
 	void AddItem(int idx, FMFileInfo * pis);
+	virtual void PostNcDestroy();
+	virtual void OnCancel();
 };

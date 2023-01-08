@@ -30,19 +30,11 @@
 #define FILE_MGR_CUT			0x00af
 #define FILE_MGR_PASTE			0x00b0
 
-//
-#define FILE_MGR_PREV_UPLOADFROMDISK	0x1101
-#define FILE_MGR_PREV_UPLOADFRURL		0x1102
-#define FILE_MGR_PREV_DOWNLOAD			0x1103
-
-#define FILE_MGR_PREV_NEWFOLDER			0x1104
-
 
 #define FILE_MGR_NEW_FOLDER_SUCCESS		(0x1106)
 
 #define FILE_MGR_ERROR					(0x1107)
 
-#define FILE_MGR_ECHO					(0x1fff)
 
 class CModuleMgr;
 class CManager;

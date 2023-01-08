@@ -11,26 +11,23 @@ HHOOK			hKbHook = NULL;
 extern"C"__declspec(dllimport)	HWND	hTopWindow;						//顶层窗口
 extern"C"__declspec(dllimport) LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);	//钩子函数
 
-CRemoteDesktopWnd::CRemoteDesktopWnd(CRemoteDesktopSrv*pHandler)
+CRemoteDesktopWnd::CRemoteDesktopWnd(CRemoteDesktopSrv*pHandler):
+	m_DestroyAfterDisconnect(FALSE),
+	m_dwCaptureFlags(0),
+	m_ControlFlags(0),
+	m_pHandler(pHandler),
+	m_dwDeskWidth(0),
+	m_dwDeskHeight(0),
+	m_dwMaxHeight(0),
+	m_dwMaxWidth(0),
+	m_dwLastTime(0),
+	m_dwFps(0),
+	m_hDC(0),
+	m_hNextViewer(NULL),
+	m_DisplayMode(0),
+	m_OldDisplayMode(0),
+	m_bFullScreenStretchMode(FALSE)
 {
-	m_dwCaptureFlags &= 0;
-	m_ControlFlags &= 0;
-
-	m_pHandler = pHandler;
-
-	m_dwDeskWidth = m_dwDeskHeight = m_dwMaxHeight = m_dwMaxWidth = 0;
-
-	m_dwLastTime = 0;
-	m_dwFps = 0;
-
-	m_hDC = NULL;
-
-	m_hNextViewer = NULL;
-
-	m_DisplayMode = 0;
-	m_OldDisplayMode = 0;
-	m_bFullScreenStretchMode = FALSE;
-
 	m_DisplayMode |= DISPLAY_TILE;
 	//
 	if (!dwWndCount){
@@ -50,6 +47,7 @@ CRemoteDesktopWnd::~CRemoteDesktopWnd()
 		hKbHook = NULL;
 	}
 }
+
 BEGIN_MESSAGE_MAP(CRemoteDesktopWnd, CFrameWnd)
 	ON_WM_CLOSE()
 	ON_WM_CREATE()
@@ -83,14 +81,17 @@ BEGIN_MESSAGE_MAP(CRemoteDesktopWnd, CFrameWnd)
 END_MESSAGE_MAP()
 
 
+
+void CRemoteDesktopWnd::PostNcDestroy()
+{
+	if (!m_DestroyAfterDisconnect){
+		delete this;
+	}
+}
+
+
 void CRemoteDesktopWnd::OnClose()
 {
-	// TODO:  在此添加消息处理程序代码和/或调用默认值
-	if (m_pHandler){
-		m_pHandler->Close();
-		m_pHandler = NULL;
-	}
-	//
 	if (m_hNextViewer){
 		ChangeClipboardChain(m_hNextViewer);
 		m_hNextViewer = NULL;
@@ -98,6 +99,16 @@ void CRemoteDesktopWnd::OnClose()
 	if (m_hDC){
 		::ReleaseDC(m_hWnd,m_hDC);
 		m_hDC = NULL;
+	}
+
+	// TODO:  在此添加消息处理程序代码和/或调用默认值
+	if (m_pHandler){
+		m_DestroyAfterDisconnect = TRUE;
+		m_pHandler->Close();
+	}
+	else{
+		//m_pHandler已经没了,现在只管自己就行.
+		DestroyWindow();
 	}
 }
 
@@ -169,15 +180,16 @@ void CRemoteDesktopWnd::OnCaptureMouse()
 {
 	m_dwCaptureFlags = (m_dwCaptureFlags & (~CAPTURE_MOUSE)) | (CAPTURE_MOUSE & (~(m_dwCaptureFlags & CAPTURE_MOUSE)));
 
-	m_pHandler->SetCaptureFlag(REMOTEDESKTOP_FLAG_CAPTURE_MOUSE | 
+	if (m_pHandler)
+		m_pHandler->SetCaptureFlag(REMOTEDESKTOP_FLAG_CAPTURE_MOUSE | 
 		((m_dwCaptureFlags&CAPTURE_MOUSE)? 0x80000000 : 0));
 }
 
 void CRemoteDesktopWnd::OnCaptureTransparentwindow()
 {
 	m_dwCaptureFlags = (m_dwCaptureFlags & (~CAPTURE_TRANSPARENT)) | (CAPTURE_TRANSPARENT & (~(m_dwCaptureFlags & CAPTURE_TRANSPARENT)));
-
-	m_pHandler->SetCaptureFlag(REMOTEDESKTOP_FLAG_CAPTURE_TRANSPARENT |
+	if (m_pHandler)
+		m_pHandler->SetCaptureFlag(REMOTEDESKTOP_FLAG_CAPTURE_TRANSPARENT |
 		((m_dwCaptureFlags&CAPTURE_TRANSPARENT) ? 0x80000000 : 0));
 
 }
@@ -218,7 +230,7 @@ void CRemoteDesktopWnd::OnUpdateCaptureTransparentwindow(CCmdUI *pCmdUI)
 LRESULT CRemoteDesktopWnd::OnError(WPARAM wParam, LPARAM lParam)
 {
 	TCHAR*Tips = (TCHAR*)wParam;
-	MessageBox(Tips, TEXT("Error"));
+	MessageBox(Tips, TEXT("Error"),MB_OK|MB_ICONINFORMATION);
 	return 0;
 }
 
@@ -348,7 +360,8 @@ BOOL CRemoteDesktopWnd::OnWndMsg(UINT message, WPARAM wParam, LPARAM lParam, LRE
 
 		if (message == WM_MOUSEWHEEL)
 			Param.dwExtraData = (SHORT)(HIWORD(wParam));
-		m_pHandler->Control(&Param);
+		if (m_pHandler)
+			m_pHandler->Control(&Param);
 		return TRUE;
 	}
 
@@ -356,7 +369,8 @@ BOOL CRemoteDesktopWnd::OnWndMsg(UINT message, WPARAM wParam, LPARAM lParam, LRE
 	{
 		Param.dwType = message;				//消息类型
 		Param.Param.VkCode = wParam;		//vkCode
-		m_pHandler->Control(&Param);		//
+		if (m_pHandler)
+			m_pHandler->Control(&Param);		//
 		return TRUE;
 	}
 	return CFrameWnd::OnWndMsg(message, wParam, lParam, pResult);
@@ -525,7 +539,8 @@ void CRemoteDesktopWnd::OnSetFocus(CWnd* pOldWnd)
 
 void CRemoteDesktopWnd::OnMaxfps10()
 {
-	m_pHandler->SetMaxFps(10);
+	if (m_pHandler)
+		m_pHandler->SetMaxFps(10);
 	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
 		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_10, MF_BYCOMMAND);
 }
@@ -533,7 +548,8 @@ void CRemoteDesktopWnd::OnMaxfps10()
 
 void CRemoteDesktopWnd::OnMaxfps20()
 {
-	m_pHandler->SetMaxFps(20);
+	if (m_pHandler)
+		m_pHandler->SetMaxFps(20);
 	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
 		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_20, MF_BYCOMMAND);
 }
@@ -541,7 +557,8 @@ void CRemoteDesktopWnd::OnMaxfps20()
 
 void CRemoteDesktopWnd::OnMaxfps30()
 {
-	m_pHandler->SetMaxFps(30);
+	if (m_pHandler)
+		m_pHandler->SetMaxFps(30);
 	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
 		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_30, MF_BYCOMMAND);
 }
@@ -549,7 +566,8 @@ void CRemoteDesktopWnd::OnMaxfps30()
 
 void CRemoteDesktopWnd::OnMaxfpsNolimit()
 {
-	m_pHandler->SetMaxFps(-1); 
+	if (m_pHandler)
+		m_pHandler->SetMaxFps(-1); 
 	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
 		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_NOLIMIT, MF_BYCOMMAND);
 }
@@ -602,7 +620,8 @@ void CRemoteDesktopWnd::OnDrawClipboard()
 			char*szText = (char*)GlobalLock(hData);
 			if (szText && m_SetClipbdText != szText){
 				//数据改变了,通知对方改变数据
-				m_pHandler->SetClipboardText(szText);
+				if (m_pHandler)
+					m_pHandler->SetClipboardText(szText);
 				//MessageBox(L"通知对方改数据了", L"Tips", MB_OK);
 			}
 			GlobalUnlock(hData);
@@ -675,32 +694,18 @@ void CRemoteDesktopWnd::OnDisplayFullscreen()
 
 
 
-void CRemoteDesktopWnd::OnOtherScreenshot()
-{
-	if (m_dwDeskHeight == 0 || m_dwDeskWidth == 0)
-		return ;
-	//
-	DWORD Width, Height; 
+void CRemoteDesktopWnd::OnOtherScreenshot(){
 	DWORD dwBmpSize;
-	BITMAPINFOHEADER bi = { 0 };
-	BITMAPFILEHEADER bmfHeader = { 0 };
+	LPVOID Buffer = NULL;
 
-	LPVOID Buffer = m_pHandler->GetBmpData(&Width, &Height, &dwBmpSize);
+	if (m_dwDeskHeight == 0 || m_dwDeskWidth == 0 || m_pHandler == NULL)
+		return ;
+	
+	Buffer = m_pHandler->GetBmpFile(&dwBmpSize);
 
-	if (Buffer == nullptr){
+	if (Buffer == NULL){
 		return;
 	}
-
-	bi.biSize = sizeof(BITMAPINFOHEADER);
-	bi.biWidth = Width;
-	bi.biHeight = Height;
-	bi.biPlanes = 1;
-	bi.biBitCount = 24;
-	bi.biCompression = BI_RGB;
-
-	bmfHeader.bfType = 0x4D42;
-	bmfHeader.bfOffBits = (DWORD)sizeof(BITMAPFILEHEADER) + (DWORD)sizeof(BITMAPINFOHEADER);
-	bmfHeader.bfSize = dwBmpSize + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
 
 	CString FileName;
 	CTime Time = CTime::GetTickCount();
@@ -721,20 +726,22 @@ void CRemoteDesktopWnd::OnOtherScreenshot()
 	}
 
 	MakesureDirExist(SavePath, TRUE);
-	HANDLE hFile = CreateFile(SavePath, GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	HANDLE hFile = CreateFile(SavePath, GENERIC_WRITE, NULL, 
+		NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	CString err;
+
+	if (hFile == INVALID_HANDLE_VALUE){
+		err.Format(TEXT("CreateFile failed with error: %d"), GetLastError());
+	}
+
 	if (hFile != INVALID_HANDLE_VALUE){
 		DWORD dwWrite = 0;
-		WriteFile(hFile, &bmfHeader, sizeof(bmfHeader), &dwWrite, NULL);
-		WriteFile(hFile, &bi, sizeof(bi), &dwWrite, NULL);
 		WriteFile(hFile, Buffer, dwBmpSize, &dwWrite, NULL);
-
 		CloseHandle(hFile);
+
 		err.Format(TEXT("Image has been save to %s"), SavePath);
-	}
-	else{
-		err.Format(TEXT("CreateFile failed with error: %d"), GetLastError());
 	}
 	delete[] Buffer;
 	MessageBox(err,TEXT("Tips"),MB_OK|MB_ICONINFORMATION);
 }
+

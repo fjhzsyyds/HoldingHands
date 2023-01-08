@@ -13,6 +13,8 @@ class CMiniFileTransSrv;
 #define WM_MNFT_FILE_TRANS_FINISHED			(WM_USER + 503)
 
 #define WM_MNFT_TRANS_FINISHED				(WM_USER + 504)
+#define WM_MNFT_ERROR						(WM_USER + 505)
+
 
 class CMiniFileTransDlg : public CDialogEx
 {
@@ -33,13 +35,17 @@ public:
 	ULONGLONG		m_ullTotalSize;
 	ULONGLONG		m_ullFinishedSize;
 
+	ULONGLONG		m_ullCurrentFinishedSize;
+	ULONGLONG		m_ullCurrentFileSize;
+
 	DWORD			m_dwTotalCount;
 	DWORD			m_dwFinishedCount;
 	DWORD			m_dwFailedCount;
 
+	BOOL			m_DestroyAfterDisconnect;
 	CMiniFileTransSrv*m_pHandler;
 	CString			m_IP;
-	afx_msg void OnBnClickedOk();
+
 	afx_msg void OnClose();
 
 	afx_msg LRESULT OnTransInfo(WPARAM wParam, LPARAM lParam);
@@ -50,7 +56,13 @@ public:
 
 	afx_msg LRESULT	OnTransFinished(WPARAM wParam, LPARAM lParam);
 
+	afx_msg LRESULT OnError(WPARAM wParam, LPARAM lParam);
+
+	static CString GetProgressString(ULONGLONG ullFinished, ULONGLONG ullTotal);
 	virtual BOOL OnInitDialog();
 	CProgressCtrl m_Progress;
 	CEdit m_TransLog;
+	virtual void PostNcDestroy();
+	virtual void OnCancel();
+	virtual void OnOK();
 };

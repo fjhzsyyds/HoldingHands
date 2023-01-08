@@ -17,6 +17,7 @@ class CFileMgrSearchSrv :
 	public CMsgHandler
 {
 private:
+	
 	CFileMgrSearchDlg*	m_pDlg;
 
 public:

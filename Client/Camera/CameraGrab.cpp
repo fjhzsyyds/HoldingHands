@@ -208,21 +208,21 @@ void CCameraGrab::GetDeviceList(const string& query_name, IBaseFilter**ppBaseFil
 		//获取设备名称....
 		varTemp.vt = VT_BSTR;
 		hr = pProBag->Read(TEXT("FriendlyName"), &varTemp, NULL);
+		
+		if (!SUCCEEDED(hr)){
+			goto failed;
+		}
+
 		TCHAR * w_name = (TCHAR *)varTemp.bstrVal;
 		//wide byte to g2312....
 		int len = WideCharToMultiByte(CP_ACP, 0, w_name, lstrlenW(w_name), nullptr, 0, nullptr, nullptr);
-		device_name.resize(len + 1,0);
+		device_name.resize(len,0);
 		WideCharToMultiByte(CP_ACP, 0, w_name, lstrlenW(w_name), 
 			(char*)device_name.c_str(), len, nullptr, nullptr);
 
 		SysFreeString(varTemp.bstrVal);
 
-		if (!SUCCEEDED(hr)){
-			goto failed;
-		}
-
-		
-		if (query_name.length() == 0 && m_device.size() == 0){			//获取所有设备信息..
+		if (!query_name.length()){			//获取所有设备信息..
 			IBaseFilter*	pBaseFilter = NULL;
 			hr = pMoniker->BindToObject(0, 0, IID_IBaseFilter, (LPVOID*)&pBaseFilter);
 
@@ -299,7 +299,7 @@ void CCameraGrab::GetDeviceList(const string& query_name, IBaseFilter**ppBaseFil
 			pIEnumPins->Release(), pIEnumPins = nullptr;;
 			pBaseFilter->Release(), pBaseFilter = nullptr;
 		}
-		else if (query_name.length()){				//查询指定的设备..
+		else if (query_name.length() && query_name == device_name){				//查询指定的设备..
 			IBaseFilter*	pBaseFilter = NULL;
 			bLoop = FALSE;
 			hr = pMoniker->BindToObject(0, 0, IID_IBaseFilter, (LPVOID*)&pBaseFilter);

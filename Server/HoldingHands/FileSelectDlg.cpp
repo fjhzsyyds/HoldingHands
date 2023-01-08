@@ -146,7 +146,7 @@ void CFileSelectDlg::OnBnClickedOk()
 			m_FileList +="\n";
 		}
 		if (m_FileList.GetLength())
-			MessageBox(m_FileList,L"You has selected these files:");
+			MessageBox(m_FileList,TEXT("You has selected these files:"));
 	}
 	else
 		m_FileList = L"";		//Ã»ÓÐÂ·¾¶

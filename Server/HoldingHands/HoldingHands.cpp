@@ -94,27 +94,20 @@ BOOL CHoldingHandsApp::InitInstance()
 	// 例如修改为公司或组织名
 	SetRegistryKey(_T("应用程序向导生成的本地应用程序"));
 
-	//static char deadline[] = "\x11\x13\x11\x11\x13\x16\x12\x14";
-	//for (int i = 0; i < 8; i++){
-	//	deadline[i] ^= 0x23;
-	//}
-	//CTime CurTime = CTime::GetTickCount();
-	//CString sTime = CurTime.Format(L"%Y%m%d");
-	////
-	//int Result = strcmp(deadline,CW2A(sTime));
-	//if (Result <= 0){
-	//	__asm{
-	//		xor eax,eax
-	//		div eax
-	//	}
-	//}
-	//
 	avcodec_register_all();
+	
+	//AllocConsole();
+
+	//SetConsoleTitle(TEXT("Holding Hands Debug Log"));
+	//DWORD dwWriteBytes = 0;
+	//WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), "Hello", 5, & dwWriteBytes, 0);;
+	//
 	// 若要创建主窗口，此代码将创建新的框架窗口
 	// 对象，然后将其设置为应用程序的主窗口对象
 	CMainFrame* pFrame = new CMainFrame;
 	if (!pFrame)
 		return FALSE;
+
 	m_pMainWnd = pFrame;
 	// 创建并加载框架及其资源
 	pFrame->LoadFrame(IDR_MAINFRAME,
@@ -133,9 +126,11 @@ int CHoldingHandsApp::ExitInstance()
 	//TODO:  处理可能已添加的附加资源
 	AfxOleTerm(FALSE);
 	
-	if (m_pShellManager)
+	if (m_pShellManager){
 		delete m_pShellManager;
-
+		m_pShellManager = NULL;
+	}
+		
 	return CWinApp::ExitInstance();
 }
 
@@ -158,6 +153,8 @@ protected:
 // 实现
 protected:
 	DECLARE_MESSAGE_MAP()
+public:
+	afx_msg void OnBnClickedOk();
 };
 
 CAboutDlg::CAboutDlg() : CDialogEx(CAboutDlg::IDD)
@@ -170,6 +167,7 @@ void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 }
 
 BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
+	ON_BN_CLICKED(IDOK, &CAboutDlg::OnBnClickedOk)
 END_MESSAGE_MAP()
 
 // 用于运行对话框的应用程序命令
@@ -183,3 +181,10 @@ void CHoldingHandsApp::OnAppAbout()
 
 
 
+
+
+void CAboutDlg::OnBnClickedOk()
+{
+	// TODO:  在此添加控件通知处理程序代码
+	CDialogEx::OnOK();
+}

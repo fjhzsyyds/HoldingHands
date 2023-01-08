@@ -141,6 +141,12 @@
     <ClInclude Include="InvalidHandler.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="AudioGrab.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="AudioPlay.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="HoldingHands.cpp">
@@ -261,6 +267,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="InvalidHandler.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="AudioGrab.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="AudioPlay.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

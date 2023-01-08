@@ -5,9 +5,10 @@
 #include "utils.h"
 
 CMiniDownloadSrv::CMiniDownloadSrv(CManager*pManager) :
-	CMsgHandler(pManager)
+	CMsgHandler(pManager),
+	m_DownloadFinished(FALSE),
+	m_pDlg(nullptr)
 {
-	m_pDlg = NULL;
 }
 
 
@@ -19,10 +20,18 @@ CMiniDownloadSrv::~CMiniDownloadSrv()
 void CMiniDownloadSrv::OnClose()
 {
 	if (m_pDlg){
-		m_pDlg->SendMessage(WM_CLOSE);
-		m_pDlg->DestroyWindow();
-		delete m_pDlg;
-		m_pDlg = NULL;
+		if (m_pDlg->m_DestroyAfterDisconnect){
+			//窗口先关闭的.
+			m_pDlg->DestroyWindow();
+			delete m_pDlg;
+		}
+		else{
+			// pHandler先关闭的,那么就不管窗口了
+			m_pDlg->m_pHandler = nullptr;
+			if (!m_DownloadFinished)
+				m_pDlg->PostMessage(WM_MNDD_ERROR, (WPARAM)TEXT("Disconnect."));
+			m_pDlg = nullptr;
+		}
 	}
 }
 void CMiniDownloadSrv::OnOpen()
@@ -97,7 +106,7 @@ void CMiniDownloadSrv::OnDownloadResult(char*result)
 		SendMsg(MNDD_DOWNLOAD_CONTINUE, 0, 0);
 	}
 	else{
-		//end.....
+		m_DownloadFinished = TRUE;
 		SendMsg(MNDD_DOWNLOAD_END, 0, 0);
 	}
 }

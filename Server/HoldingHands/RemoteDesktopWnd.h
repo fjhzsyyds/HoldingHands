@@ -24,6 +24,7 @@ class CRemoteDesktopWnd :
 	public CFrameWnd
 {
 public:
+	BOOL m_DestroyAfterDisconnect;
 	CRemoteDesktopSrv*m_pHandler;
 	//FPS 
 	DWORD	m_dwLastTime;
@@ -94,5 +95,6 @@ public:
 
 	afx_msg void OnDisplayFullscreen();
 	afx_msg void OnOtherScreenshot();
+	virtual void PostNcDestroy();
 };
 

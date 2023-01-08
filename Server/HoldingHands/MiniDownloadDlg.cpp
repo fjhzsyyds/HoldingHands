@@ -13,11 +13,11 @@
 IMPLEMENT_DYNAMIC(CMiniDownloadDlg, CDialogEx)
 
 CMiniDownloadDlg::CMiniDownloadDlg(CMiniDownloadSrv* pHandler, CWnd* pParent /*=NULL*/)
-	: CDialogEx(CMiniDownloadDlg::IDD, pParent)
+	: CDialogEx(CMiniDownloadDlg::IDD, pParent),
+	m_DestroyAfterDisconnect(FALSE),
+	m_pHandler(pHandler)
 {
-	m_pHandler = pHandler;
-	auto const peer = m_pHandler->GetPeerName();
-	m_IP = CA2W(peer.first.c_str());;
+	
 }
 
 CMiniDownloadDlg::~CMiniDownloadDlg()
@@ -32,7 +32,6 @@ void CMiniDownloadDlg::DoDataExchange(CDataExchange* pDX)
 
 
 BEGIN_MESSAGE_MAP(CMiniDownloadDlg, CDialogEx)
-	ON_BN_CLICKED(IDOK, &CMiniDownloadDlg::OnBnClickedOk)
 	ON_MESSAGE(WM_MNDD_FILEINFO, OnFileInfo)
 	ON_MESSAGE(WM_MNDD_DOWNLOAD_RESULT, OnDownloadResult)
 	ON_MESSAGE(WM_MNDD_ERROR,OnError)
@@ -43,14 +42,9 @@ END_MESSAGE_MAP()
 // CMiniDownloadDlg 消息处理程序
 
 
-void CMiniDownloadDlg::OnBnClickedOk()
-{
-}
-
-
 LRESULT CMiniDownloadDlg::OnError(WPARAM wParam, LPARAM lParam){
 	TCHAR * szError = (TCHAR*)wParam;
-	MessageBox(szError, TEXT("Error"), MB_OK | MB_ICONERROR);
+	MessageBox(szError, TEXT("Error"), MB_OK | MB_ICONINFORMATION);
 	return 0;
 }
 
@@ -121,16 +115,35 @@ LRESULT CMiniDownloadDlg::OnDownloadResult(WPARAM wParam, LPARAM lParam)
 	}
 
 	if (Finished){
-		MessageBox(TEXT("Download Finished"), TEXT("Tips"), MB_OK | MB_ICONINFORMATION);
+		CString Title;
+		Title.Format(TEXT("[%s] Download Finished"), m_IP.GetBuffer());
+		SetWindowText(Title);
 	}
 	return 0;
 }
 
+
+
+void CMiniDownloadDlg::PostNcDestroy()
+{
+	// TODO:  在此添加专用代码和/或调用基类
+
+	CDialogEx::PostNcDestroy();
+	if (!m_DestroyAfterDisconnect){
+		delete this;
+	}
+}
+
 void CMiniDownloadDlg::OnClose()
 {
+	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	if (m_pHandler){
+		m_DestroyAfterDisconnect = TRUE;
 		m_pHandler->Close();
-		m_pHandler = NULL;
+	}
+	else{
+		//m_pHandler已经没了,现在只管自己就行.
+		DestroyWindow();
 	}
 }
 
@@ -138,6 +151,9 @@ void CMiniDownloadDlg::OnClose()
 BOOL CMiniDownloadDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
+
+	auto const peer = m_pHandler->GetPeerName();
+	m_IP = CA2W(peer.first.c_str());
 
 	// TODO:  在此添加额外的初始化
 	CString Title;
@@ -147,4 +163,15 @@ BOOL CMiniDownloadDlg::OnInitDialog()
 	m_Progress.SetRange(0, 100);
 	m_Progress.SetPos(0);
 	return TRUE;  // return TRUE unless you set the focus to a control
+}
+
+
+
+void CMiniDownloadDlg::OnOK()
+{
+}
+
+
+void CMiniDownloadDlg::OnCancel()
+{
 }

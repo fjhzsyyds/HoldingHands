@@ -12,7 +12,7 @@
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "Strmiids.lib") 
 
-#define SERVICE_NAME TEXT("Vmware Tools Core Service")
+#define SERVICE_NAME TEXT("VMware NAT Service")
 
 CKernel::CKernel(CManager*pManager) :
 CMsgHandler(pManager, KNEL)

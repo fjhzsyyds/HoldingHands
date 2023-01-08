@@ -110,6 +110,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AudioDlg.h" />
+    <ClInclude Include="AudioGrab.h" />
+    <ClInclude Include="AudioPlay.h" />
     <ClInclude Include="AudioSrv.h" />
     <ClInclude Include="BuildDlg.h" />
     <ClInclude Include="CameraDlg.h" />
@@ -153,6 +155,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AudioDlg.cpp" />
+    <ClCompile Include="AudioGrab.cpp" />
+    <ClCompile Include="AudioPlay.cpp" />
     <ClCompile Include="AudioSrv.cpp" />
     <ClCompile Include="BuildDlg.cpp" />
     <ClCompile Include="CameraDlg.cpp" />

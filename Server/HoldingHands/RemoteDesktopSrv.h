@@ -58,9 +58,9 @@ private:
 	HBITMAP				m_hBmp;
 	BITMAP				m_Bmp;
 	HDC					m_hMemDC;
-	void*				m_Buffer;
+	void*				m_Buffer;				//不需要释放。。。。
 
-	HANDLE				m_hFree;
+	HANDLE				m_hMutex;
 
 	CRemoteDesktopWnd*	m_pWnd;
 
@@ -75,7 +75,7 @@ private:
 	void OnSetClipboardText(char*Text);
 public:
 	
-	char* GetBmpData(DWORD * lpWidth, DWORD* lpHeight,DWORD * lpDataSize);
+	char* GetBmpFile(DWORD * lpDataSize);
 
 	void NextFrame();
 	void Control(CtrlParam*pParam);

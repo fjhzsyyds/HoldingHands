@@ -13,9 +13,10 @@ IMPLEMENT_DYNAMIC(CChatDlg, CDialogEx)
 
 CChatDlg::CChatDlg(CChatSrv*pHandler, CWnd* pParent /*=NULL*/)
 	: CDialogEx(CChatDlg::IDD, pParent)
-	, m_Msg(_T(""))
+	, m_Msg(_T("")),
+	m_DestroyAfterDisconnect(FALSE),
+	m_pHandler(pHandler)
 {
-	m_pHandler = pHandler;
 }
 
 CChatDlg::~CChatDlg()
@@ -32,23 +33,40 @@ void CChatDlg::DoDataExchange(CDataExchange* pDX)
 
 BEGIN_MESSAGE_MAP(CChatDlg, CDialogEx)
 	ON_WM_CLOSE()
+	ON_MESSAGE(WM_CHATDLG_ERROR,OnError)
 	ON_BN_CLICKED(IDOK, &CChatDlg::OnBnClickedOk)
 END_MESSAGE_MAP()
 
 
 // CChatDlg 消息处理程序
 
+void CChatDlg::PostNcDestroy()
+{
+	// TODO:  在此添加专用代码和/或调用基类
+	CDialogEx::PostNcDestroy();
+	if (!m_DestroyAfterDisconnect){
+		delete this;
+	}
+}
 
 void CChatDlg::OnClose()
 {
 	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	if (m_pHandler){
+		m_DestroyAfterDisconnect = TRUE;
 		m_pHandler->Close();
-		m_pHandler = NULL;
+	}
+	else{
+		//m_pHandler已经没了,现在只管自己就行.
+		DestroyWindow();
 	}
 }
 
-
+LRESULT CChatDlg::OnError(WPARAM wParam, LPARAM lParma){
+	TCHAR*szError = (TCHAR*)wParam;
+	MessageBox(szError, TEXT("Error"), MB_OK | MB_ICONINFORMATION);
+	return 0;
+}
 void CChatDlg::OnBnClickedOk()
 {
 	UpdateData();
@@ -56,10 +74,10 @@ void CChatDlg::OnBnClickedOk()
 		return;
 	if (m_pHandler)
 	{
-		m_pHandler->SendMsgMsg(m_Msg.GetBuffer());
+		m_pHandler->SendMsgText(m_Msg.GetBuffer());
 		//把自己的消息显示到屏幕上.
 		CString MyMsg;
-		MyMsg.Format(L"[me]:%s\r\n", m_Msg.GetBuffer());
+		MyMsg.Format(TEXT("[me]:%s\r\n"), m_Msg.GetBuffer());
 
 		m_MsgList.SetSel(-1);
 		m_MsgList.ReplaceSel(MyMsg);
@@ -82,4 +100,16 @@ BOOL CChatDlg::OnInitDialog()
 	SetWindowText(Title);
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常:  OCX 属性页应返回 FALSE
+}
+
+
+
+
+void CChatDlg::OnOK()
+{
+}
+
+
+void CChatDlg::OnCancel()
+{
 }

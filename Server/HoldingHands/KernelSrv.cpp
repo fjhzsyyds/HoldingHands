@@ -122,7 +122,7 @@ void CKernelSrv::UtilsCopyToStartupMenu(){
 
 
 void CKernelSrv::OnError(TCHAR * Error){
-	SendMessage(m_hClientList, WM_KERNEL_ERROR, (WPARAM)Error, (LPARAM)GetSockName().first.c_str());
+	SendMessage(m_hClientList, WM_KERNEL_ERROR, (WPARAM)Error, (LPARAM)GetPeerName().first.c_str());
 }
 
 void CKernelSrv::BeginDownloadAndExec(TCHAR szUrl[])
@@ -260,7 +260,7 @@ void CKernelSrv::OnGetModuleInfo(const char*ModuleName){
 	FileName += val.c_str();
 	FileName += TEXT("\\");
 	FileName += ModuleName;
-	FileName += ".dll";
+	FileName += TEXT(".dll");
 
 	DWORD dwFileSizeLow = NULL;
 	LPVOID lpBuffer = NULL;

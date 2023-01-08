@@ -129,12 +129,15 @@ void CManager::ProcessCompletedPacket(int type, CPacket*pPkt){
 		handler_init();
 		return;
 	}
+
 	if (PACKET_CLIENT_DISCONNECT == type){
 		handler_term();
 		return;
 	}
 
 	if (PACKET_READ_COMPLETED == type){
+		std::cout << "Read Packet (type : " << pPkt->GetCommand() <<
+			" size : "<< pPkt->GetBodyLen() << std::endl;
 		DispatchMsg(pPkt);
 		return;
 	}

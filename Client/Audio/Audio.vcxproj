@@ -90,7 +90,11 @@
     <ClCompile Include="..\Common\Packet.cpp" />
     <ClCompile Include="Audio.cpp" />
     <ClCompile Include="AudioGrab.cpp" />
+    <ClCompile Include="AudioPlay.cpp" />
     <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="AudioPlay.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

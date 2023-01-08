@@ -122,7 +122,6 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_wndStatusBar.SetPaneInfo(4, ID_DOWNLOAD_SPEED, SBPS_NORMAL, 160);
 	m_wndStatusBar.SetPaneInfo(5, ID_CUR_DATE, SBPS_NORMAL, 160);
 
-
 	if (!m_ClientList.Create(WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT,
 		rect, this, NULL))
 	{
@@ -130,9 +129,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		return -1;      // 未能创建
 	}
 
-
 	m_View |= (VIEW_SHOW_CLIENLIST);
-
 	m_ServerStatu = SVR_STATU_STOPPED;
 
 	//创建服务器
@@ -141,7 +138,9 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	
 	//用于刷新数据的计时器
 	SetTimer(10086, 1000, NULL);
-
+	//
+	SetIcon(AfxGetApp()->LoadIcon(IDR_MAINFRAME),TRUE);
+	SetIcon(AfxGetApp()->LoadIcon(IDR_MAINFRAME), TRUE);
 	return 0;
 }
 
@@ -153,7 +152,6 @@ BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 	//  CREATESTRUCT cs 来修改窗口类或样式
 
 	cs.style |= (CS_HREDRAW | CS_VREDRAW);
-
 	cs.dwExStyle &= ~WS_EX_CLIENTEDGE;
 	cs.lpszClass = AfxRegisterWndClass(0);
 	cs.lpszName = TEXT("[HoldingHands]");
@@ -182,6 +180,7 @@ void CMainFrame::OnSetFocus(CWnd* /*pOldWnd*/)
 {
 	
 }
+
 void CMainFrame::OnPaint()
 {
 	CPaintDC dc(this); // device context for painting

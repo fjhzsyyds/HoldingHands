@@ -4,26 +4,25 @@
 #include "resource.h"
 
 CMiniFileTransSrv::CMiniFileTransSrv(CManager*pManager) :
-	CMsgHandler(pManager)
+	CMsgHandler(pManager),
+	m_dwCurFileIdentity(0),
+	m_hCurFile(INVALID_HANDLE_VALUE),
+	m_ullLeftFileLength(0),
+	m_dwCurFileAttribute(0),
+	m_pInit(nullptr),
+	m_pDlg(nullptr),
+	m_TransferFinished(FALSE)
 {
 	memset(m_Path, 0, sizeof(m_Path));
-	m_dwCurFileIdentity = 0;
-	m_hCurFile = INVALID_HANDLE_VALUE;
-	m_ullLeftFileLength = 0;			//剩余长度
-	m_dwCurFileAttribute = 0;			//当前文件属性
 
-	//
-	m_pInit = NULL;
-	m_pDlg = NULL;
 }
 
 
 CMiniFileTransSrv::~CMiniFileTransSrv()
 {
-	if (m_pInit)
-	{
+	if (m_pInit){
 		free(m_pInit);
-		m_pInit = NULL;
+		m_pInit = nullptr;
 	}
 }
 
@@ -32,24 +31,37 @@ CMiniFileTransSrv::~CMiniFileTransSrv()
 void CMiniFileTransSrv::OnClose()
 {
 	Clean();
-	//
 	if (m_pDlg){
-		m_pDlg->SendMessage(WM_CLOSE);
-		m_pDlg->DestroyWindow();
-		delete m_pDlg;
-		m_pDlg = NULL;
+		if (m_pDlg->m_DestroyAfterDisconnect){
+			//窗口先关闭的.
+			m_pDlg->DestroyWindow();
+			delete m_pDlg;
+		}
+		else{
+			// pHandler先关闭的,那么就不管窗口了
+			m_pDlg->m_pHandler = nullptr;
+			if (!m_TransferFinished){
+				m_pDlg->PostMessage(WM_MNFT_ERROR, (WPARAM)TEXT("Disconnect."));
+			}
+		}
+		m_pDlg = nullptr;
 	}
 }
 
 void CMiniFileTransSrv::OnOpen()
 {
 	m_pDlg = new CMiniFileTransDlg(this);
-	if (FALSE == m_pDlg->Create(IDD_FILETRANS,CWnd::GetDesktopWindow()))
-	{
+	if (FALSE == m_pDlg->Create(IDD_FILETRANS,CWnd::GetDesktopWindow())){
 		Close();
 		return;
 	}
 	m_pDlg->ShowWindow(SW_SHOW);
+}
+
+
+void CMiniFileTransSrv::OnTransferFinished(){
+	m_TransferFinished = TRUE;
+	m_pDlg->SendMessage(WM_MNFT_TRANS_FINISHED);
 }
 
 //这里只有服务器才会调用.
@@ -71,7 +83,8 @@ void CMiniFileTransSrv::OnMINIInit(DWORD Read, char*Buffer)
 			*pPath = NULL;
 			//保存Dest路径.
 			lstrcpy(m_Path, m_pInit->m_szBuffer);
-			SendMsg(MNFT_TRANS_INFO_GET, (char*)(pPath+1),sizeof(TCHAR)*(lstrlen(pPath + 1) + 1));//发送\n之后的数据.
+			SendMsg(MNFT_TRANS_INFO_GET, (char*)(pPath+1),
+				sizeof(TCHAR)*(lstrlen(pPath + 1) + 1));//发送\n之后的数据.
 		}
 		else
 			Close();//无效的szBuffer;
@@ -105,7 +118,7 @@ void CMiniFileTransSrv::OnReadMsg(WORD Msg,  DWORD dwSize, char*Buffer)
 		OnGetFileDataChunkRpl(dwSize, Buffer);
 		break;
 	case MNFT_TRANS_FINISHED:
-		m_pDlg->SendMessage(WM_MNFT_TRANS_FINISHED, 0, 0);		//传输结束
+		OnTransferFinished();
 		break;
 	/*******************************************************************************/
 		//when we SendMsg File to peer.
@@ -199,8 +212,7 @@ void CMiniFileTransSrv::OnGetFileDataChunkRpl(DWORD Read, char*Buffer)
 void CMiniFileTransSrv::OnGetFileInfoRpl(DWORD Read, char*Buffer)
 {
 	MNFT_File_Info *pRpl = (MNFT_File_Info*)Buffer;
-	if (pRpl->dwFileIdentity != m_dwCurFileIdentity)
-	{
+	if (pRpl->dwFileIdentity != m_dwCurFileIdentity){
 		Close();
 		return;
 	}
@@ -291,17 +303,16 @@ void CMiniFileTransSrv::OnGetTransInfoRpl(DWORD Read, char*Buffer)
 void CMiniFileTransSrv::OnFileTransFinished(DWORD Read, char*Buffer)
 {
 	MNFT_File_Trans_Finished*pftf = (MNFT_File_Trans_Finished*)Buffer;
-	if (pftf->dwFileIdentity != m_dwCurFileIdentity)
-	{
+	if (pftf->dwFileIdentity != m_dwCurFileIdentity){
 		Close();
 		return;
 	}
 	
-	if (m_hCurFile != INVALID_HANDLE_VALUE)
-	{
+	if (m_hCurFile != INVALID_HANDLE_VALUE){
 		CloseHandle(m_hCurFile);
 		m_hCurFile = INVALID_HANDLE_VALUE;
 	}
+
 	m_dwCurFileIdentity = 0;
 	m_ullLeftFileLength = 0;
 	m_dwCurFileAttribute = 0;
@@ -341,54 +352,53 @@ void CMiniFileTransSrv::OnGetFileDataChunk(DWORD Read, char*Buffer)
 void CMiniFileTransSrv::OnGetFileInfo(DWORD Read, char*Buffer)
 {
 	MNFT_File_Info_Get *pfig = (MNFT_File_Info_Get*)Buffer;
-	if (!m_JobList.GetCount())
-	{
+	if (!m_JobList.GetCount()){
 		SendMsg(MNFT_TRANS_FINISHED, 0, 0);//传输结束.
-		m_pDlg->SendMessage(WM_MNFT_TRANS_FINISHED, 0, 0); 
+		OnTransferFinished();
+		return;
 	}
-	else
+
+	//save file identity;
+	m_dwCurFileIdentity = pfig->dwFileIdentity;
+	//
+	DWORD dwRplLen = sizeof(DWORD) * 4 +
+		sizeof(TCHAR)* (lstrlen(m_JobList.GetHead()->RelativeFilePath) + 1);
+
+	MNFT_File_Info*pReply = (MNFT_File_Info*)malloc(dwRplLen);
+
+	pReply->dwFileIdentity = m_dwCurFileIdentity;
+	pReply->fiFileInfo.Attribute = m_JobList.GetHead()->Attribute;
+	pReply->fiFileInfo.dwFileLengthLo = m_JobList.GetHead()->dwFileLengthLo;
+	pReply->fiFileInfo.dwFileLengthHi = m_JobList.GetHead()->dwFileLengthHi;
+
+	lstrcpy(pReply->fiFileInfo.RelativeFilePath, m_JobList.GetHead()->RelativeFilePath);
+	/*************************************************************************/
+	//交给窗口去处理
+	m_pDlg->SendMessage(WM_MNFT_FILE_TRANS_BEGIN, (WPARAM)&pReply->fiFileInfo, 0);
+	/*************************************************************************/
+	SendMsg(MNFT_FILE_INFO_RPL, (char*)pReply, dwRplLen);
+	free(pReply);
+	//正常情况下这里的代码是不会执行的.因为初始情况和每次结束发送后都会清除
+	if (m_hCurFile != INVALID_HANDLE_VALUE)
 	{
-		//save file identity;
-		m_dwCurFileIdentity = pfig->dwFileIdentity;
-		//
-		DWORD dwRplLen = sizeof(DWORD) * 4 +
-			sizeof(TCHAR)* (lstrlen(m_JobList.GetHead()->RelativeFilePath) + 1);
-
-		MNFT_File_Info*pReply = (MNFT_File_Info*)malloc(dwRplLen);
-
-		pReply->dwFileIdentity = m_dwCurFileIdentity;
-		pReply->fiFileInfo.Attribute = m_JobList.GetHead()->Attribute;
-		pReply->fiFileInfo.dwFileLengthLo = m_JobList.GetHead()->dwFileLengthLo;
-		pReply->fiFileInfo.dwFileLengthHi = m_JobList.GetHead()->dwFileLengthHi;
-
-		lstrcpy(pReply->fiFileInfo.RelativeFilePath, m_JobList.GetHead()->RelativeFilePath);
-		/*************************************************************************/
-		//交给窗口去处理
-		m_pDlg->SendMessage(WM_MNFT_FILE_TRANS_BEGIN, (WPARAM)&pReply->fiFileInfo, 0);
-		/*************************************************************************/
-		SendMsg(MNFT_FILE_INFO_RPL, (char*)pReply, dwRplLen);
-		free(pReply);
-		//正常情况下这里的代码是不会执行的.因为初始情况和每次结束发送后都会清除
-		if (m_hCurFile != INVALID_HANDLE_VALUE)
-		{
-			CloseHandle(m_hCurFile);
-			m_hCurFile = INVALID_HANDLE_VALUE;
-		}
-		//如果不是目录,那么打开对应的文件 
-		if (!(m_JobList.GetHead()->Attribute & FILE_ATTRIBUTE_DIRECTORY))
-		{
-			DWORD dwFullPathLen = lstrlen(m_Path) + 1 + lstrlen(m_JobList.GetHead()->RelativeFilePath) + 1;
-			PTCHAR FullPath = (TCHAR*)malloc(dwFullPathLen*sizeof(TCHAR));
-			lstrcpy(FullPath, m_Path);
-			lstrcat(FullPath, L"\\");
-			lstrcat(FullPath, m_JobList.GetHead()->RelativeFilePath);
-			//打开文件句柄
-			m_hCurFile = CreateFileW(FullPath, GENERIC_READ, FILE_SHARE_READ,
-				NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-			//
-			free(FullPath);
-		}
+		CloseHandle(m_hCurFile);
+		m_hCurFile = INVALID_HANDLE_VALUE;
 	}
+	//如果不是目录,那么打开对应的文件 
+	if (!(m_JobList.GetHead()->Attribute & FILE_ATTRIBUTE_DIRECTORY))
+	{
+		DWORD dwFullPathLen = lstrlen(m_Path) + 1 + lstrlen(m_JobList.GetHead()->RelativeFilePath) + 1;
+		PTCHAR FullPath = (TCHAR*)malloc(dwFullPathLen*sizeof(TCHAR));
+		lstrcpy(FullPath, m_Path);
+		lstrcat(FullPath, L"\\");
+		lstrcat(FullPath, m_JobList.GetHead()->RelativeFilePath);
+		//打开文件句柄
+		m_hCurFile = CreateFileW(FullPath, GENERIC_READ, FILE_SHARE_READ,
+			NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+		//
+		free(FullPath);
+	}
+
 }
 
 

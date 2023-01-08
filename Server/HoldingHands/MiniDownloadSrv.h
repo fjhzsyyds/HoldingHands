@@ -31,6 +31,7 @@ public:
 	3.Finished.
 	*/
 private:
+	BOOL			m_DownloadFinished;
 	CMiniDownloadDlg*m_pDlg;
 public:
 	void OnClose();					//当socket断开的时候调用这个函数

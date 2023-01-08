@@ -13,9 +13,9 @@ CMsgHandler::~CMsgHandler(){
 
 }
 
-BOOL CMsgHandler::SendMsg(WORD Msg,char*data, int len)
+BOOL CMsgHandler::SendMsg(WORD Msg,void*data, int len)
 {
-	return m_pManager->SendMsg(this, Msg, data,len);
+	return m_pManager->SendMsg(this, Msg, (char*)data,len);
 }
 
 void CMsgHandler::Close(){

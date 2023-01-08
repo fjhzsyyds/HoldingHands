@@ -16,10 +16,17 @@ CCmdSrv::~CCmdSrv()
 void CCmdSrv::OnClose()
 {
 	if (m_pWnd){
-		m_pWnd->SendMessage(WM_CLOSE);
-		m_pWnd->DestroyWindow();
-
-		m_pWnd = NULL;
+		if (m_pWnd->m_DestroyAfterDisconnect){
+			//窗口先关闭的.
+			m_pWnd->DestroyWindow();
+			delete m_pWnd;
+		}
+		else{
+			// pHandler先关闭的,那么就不管窗口了
+			m_pWnd->m_pHandler = nullptr;
+			m_pWnd->PostMessage(WM_CMD_ERROR, (WPARAM)TEXT("Disconnect."));
+			m_pWnd = nullptr;
+		}
 	}
 }
 void CCmdSrv::OnOpen(){

@@ -47,6 +47,8 @@ private:
 	HDC					m_hMemDC;
 	void*				m_Buffer;
 
+	HANDLE				m_hMutex;
+
 	int	CameraInit(int width, int height);
 	void	CameraTerm();
 public:
@@ -61,13 +63,13 @@ public:
 	void OnVideoSize(int code,string&err,int width,int height);
 	void OnStopOk();
 	void OnDeviceList(char*DeviceList);
-	void OnScreenShot();
-
 
 	void Start(const string& device, int dwFormat,int bitcount, int dwWidth, int dwHeight);
 	void Stop();
-	void ScreenShot();
 	void OnError(TCHAR*szError);
+
+
+	char * GetBmpFile(DWORD * lpDataSize);
 
 	CCameraSrv(CManager*pManager);
 	~CCameraSrv();

@@ -26,8 +26,9 @@ protected:
 
 	DECLARE_MESSAGE_MAP()
 public:
-	afx_msg void OnBnClickedOk();
 	CProgressCtrl		m_Progress;
+
+	BOOL m_DestroyAfterDisconnect;
 	CMiniDownloadSrv*	m_pHandler;
 
 	CString				m_IP;
@@ -37,4 +38,7 @@ public:
 	afx_msg LRESULT OnError(WPARAM wParam, LPARAM lParma);
 	afx_msg void OnClose();
 	virtual BOOL OnInitDialog();
+	virtual void PostNcDestroy();
+	virtual void OnOK();
+	virtual void OnCancel();
 };

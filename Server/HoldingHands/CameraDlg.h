@@ -16,7 +16,6 @@ using std::pair;
 #define WM_CAMERA_ERROR		(WM_USER+353)
 #define WM_CAMERA_FRAME		(WM_USER+354)
 #define WM_CAMERA_VIDEOSIZE (WM_USER+355)
-#define WM_CAMERA_SCREENSHOT (WM_USER+356)
 #define WM_CAMERA_STOP_OK	(WM_USER + 357)
 
 // CCameraDlg ¶Ô»°¿ò
@@ -39,6 +38,7 @@ protected:
 
 	DECLARE_MESSAGE_MAP()
 public:
+
 	HDC			m_hdc;
 	DWORD		m_dwFps;
 	DWORD		m_dwLastTime;
@@ -53,6 +53,7 @@ public:
 
 	CString m_Title;
 
+	BOOL m_DestroyAfterDisconnect;
 	CCameraSrv*	m_pHandler;
 
 	CComboBox m_FormatList;
@@ -61,7 +62,6 @@ public:
 
 	VideoInfoList		m_device;
 
-	afx_msg void OnBnClickedOk();
 	afx_msg void OnBnClickedButton1();
 
 	afx_msg LRESULT OnDeviceList(WPARAM wParam, LPARAM lParam);
@@ -69,7 +69,6 @@ public:
 	afx_msg LRESULT OnError(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnVideoSize(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnStopOk(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnScreenShot(WPARAM wParam, LPARAM lParam);
 
 	virtual BOOL OnInitDialog();
 	afx_msg void OnClose();
@@ -81,4 +80,7 @@ public:
 	afx_msg void OnCbnSelchangeCombo3();
 	CComboBox m_BitCount;
 	afx_msg void OnCbnSelchangeCombo4();
+	virtual void PostNcDestroy();
+	virtual void OnOK();
+	virtual void OnCancel();
 };

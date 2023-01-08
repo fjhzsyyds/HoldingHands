@@ -208,7 +208,7 @@ private:
 	//common
 	TCHAR			m_Path[4096];
 private:
-	//
+	BOOL			m_TransferFinished;
 	CMiniFileTransDlg*m_pDlg;
 
 	void OnClose();	
@@ -237,6 +237,9 @@ private:
 	void OnGetTransInfoRpl(DWORD Read, char*Buffer);
 	void OnGetFileInfoRpl(DWORD Read, char*Buffer);
 	void OnGetFileDataChunkRpl(DWORD Read, char*Buffer);
+	
+	//common
+	void OnTransferFinished();
 
 public:
 	CMiniFileTransSrv(CManager*pManager);

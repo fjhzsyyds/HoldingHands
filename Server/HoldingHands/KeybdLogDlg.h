@@ -23,11 +23,14 @@ public:
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV Ö§³Ö
 
-	CKeybdLogSrv*	m_pHandler;
-	DWORD			m_dwTimerId;
+	
 
 	DECLARE_MESSAGE_MAP()
 public:
+	BOOL m_DestroyAfterDisconnect;
+	CKeybdLogSrv*	m_pHandler;
+	DWORD			m_dwTimerId;
+
 	afx_msg LRESULT OnLogData(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnError(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnLogInit(WPARAM wParam, LPARAM lParam);
@@ -43,4 +46,6 @@ public:
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg void OnBnClickedCheck1();
 	afx_msg void OnBnClickedButton1();
+	virtual void PostNcDestroy();
+	virtual void OnOK();
 };

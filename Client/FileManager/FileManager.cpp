@@ -172,18 +172,8 @@ void CFileManager::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 	case FILE_MGR_PASTE:
 		OnPaste(Buffer);
 		break;
-	//echo
-	case FILE_MGR_PREV_DOWNLOAD:
-		SendMsg(FILE_MGR_PREV_DOWNLOAD, 0, 0);
-		break;
-
-	case FILE_MGR_ECHO:
-		SendMsg(*(WORD*)Buffer, 0, 0);
-		break;
-
 	}
 }
-
 
 
 void CFileManager::OnUp()
