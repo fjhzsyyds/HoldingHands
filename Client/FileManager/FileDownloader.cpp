@@ -121,10 +121,12 @@ void CFileDownloader::OnContinueDownload()
 	DWORD dwReadBytes = 0;
 	DWORD dwWriteBytes = 0;
 	memset(m_Buffer,0,0x10000);
+	string res;
+
 	if (!InternetReadFile(m_hRemoteFile, m_Buffer, 0x10000, &dwReadBytes)){
 		root["code"] = "-1";
 		root["err"] = "InternetReadFile Failed";
-		string res = Json::FastWriter().write(root);
+		res = Json::FastWriter().write(root);
 		SendMsg(MNDD_DOWNLOAD_RESULT, (void*)res.c_str(), res.length() + 1);
 		return;
 	}
@@ -134,7 +136,7 @@ void CFileDownloader::OnContinueDownload()
 
 		root["code"] = "-2";
 		root["err"] = "WriteFile Failed";
-		string res = Json::FastWriter().write(root);
+		res = Json::FastWriter().write(root);
 		SendMsg(MNDD_DOWNLOAD_RESULT, (void*)res.c_str(), res.length() + 1);
 		return;
 	}
@@ -150,7 +152,7 @@ void CFileDownloader::OnContinueDownload()
 		m_iFinishedSize == m_iTotalSize){
 		root["err"] = "finished";
 	}
-	string res = Json::FastWriter().write(root);
+	res = Json::FastWriter().write(root);
 	SendMsg(MNDD_DOWNLOAD_RESULT, (void*)res.c_str(), res.length() + 1);
 	return;
 }
@@ -239,7 +241,7 @@ void CFileDownloader::OnGetFileInfo()
 		if (!m_hConnect){
 			root["code"] = "-3";
 			root["err"] = "InternetConnect Failed";
-			 res = Json::FastWriter().write(root);
+			res = Json::FastWriter().write(root);
 			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
 			return;
 		}
@@ -247,7 +249,7 @@ void CFileDownloader::OnGetFileInfo()
 		if (!m_hRemoteFile){
 			root["code"] = "-3";
 			root["err"] = "FtpOpenFile Failed";
-			 res = Json::FastWriter().write(root);
+			res = Json::FastWriter().write(root);
 			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
 			return;
 		}
@@ -263,7 +265,7 @@ void CFileDownloader::OnGetFileInfo()
 		if (!m_hConnect){
 			root["code"] = "-4";
 			root["err"] = "InternetConnect Failed";
-			 res = Json::FastWriter().write(root);
+			res = Json::FastWriter().write(root);
 			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
 			return;
 		}
@@ -274,7 +276,7 @@ void CFileDownloader::OnGetFileInfo()
 		if (!m_hRemoteFile){
 			root["code"] = "-5";
 			root["err"] = "HttpOpenRequest Failed";
-			 res = Json::FastWriter().write(root);
+			res = Json::FastWriter().write(root);
 			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
 			return;
 		}
@@ -282,7 +284,7 @@ void CFileDownloader::OnGetFileInfo()
 		if(!HttpSendRequest(m_hRemoteFile, NULL, NULL, NULL, NULL)){
 			root["code"] = "-6";
 			root["err"] = "HttpSendRequest Failed";
-			 res = Json::FastWriter().write(root);
+			res = Json::FastWriter().write(root);
 			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
 			return;
 		}
@@ -296,7 +298,7 @@ void CFileDownloader::OnGetFileInfo()
 		do{
 			root["code"] = "-8";
 			root["err"] = "Unsupported  Protocol.";
-			 res = Json::FastWriter().write(root);
+			res = Json::FastWriter().write(root);
 			SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
 			return;
 		} while (0);
@@ -309,7 +311,7 @@ void CFileDownloader::OnGetFileInfo()
 	if (m_hLocalFile == INVALID_HANDLE_VALUE){
 		root["code"] = "-9";
 		root["err"] = "CreateFile Failed.";
-		 res = Json::FastWriter().write(root);
+		res = Json::FastWriter().write(root);
 		SendMsg(MNDD_FILE_INFO, (void*)res.c_str(), res.length() + 1);
 		return;
 	}
@@ -319,11 +321,11 @@ void CFileDownloader::OnGetFileInfo()
 	root["err"] = "success";
 	root["filesize"] = m_iTotalSize;	//-1 ±íÊ¾Î´Öª..
 	//url...
-	char * tempUrl = convertUtf16ToGB2312(pUrl);
+	char * tempUrl = convertUtf16ToAnsi(pUrl);
 	root["url"] = tempUrl;
 	delete[]tempUrl;
 	//file name...
-	char * filename = convertUtf16ToGB2312(szFileName);
+	char * filename = convertUtf16ToAnsi(szFileName);
 	root["filename"] = filename;
 	delete[] filename;
 	//

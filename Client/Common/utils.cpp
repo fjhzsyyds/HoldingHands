@@ -130,7 +130,7 @@ DWORD getParentProcessId(DWORD dwPid){
 }
 
 
-char* convertUTF8ToGB2312(const char* utf8)
+char* convertUTF8ToAnsi(const char* utf8)
 {
 	int len = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0);
 	wchar_t* wstr = new wchar_t[len + 1];
@@ -144,7 +144,7 @@ char* convertUTF8ToGB2312(const char* utf8)
 	return str;
 }
 
-char* convertGB2312ToUTF8(const char* gb2312)
+char* convertAnsiToUTF8(const char* gb2312)
 {
 	int len = MultiByteToWideChar(CP_ACP, 0, gb2312, -1, NULL, 0);
 	wchar_t* wstr = new wchar_t[len + 1];
@@ -159,14 +159,14 @@ char* convertGB2312ToUTF8(const char* gb2312)
 }
 
 
-wchar_t* convertGB2312ToUtf16(const char* gb2312){
+wchar_t* convertAnsiToUtf16(const char* gb2312){
 	int len = MultiByteToWideChar(CP_ACP, 0, gb2312, -1, NULL, 0);
 	wchar_t * wstr = new wchar_t[len + 1]; 
 	MultiByteToWideChar(CP_ACP, 0, gb2312, -1, wstr, len);
 	return wstr;
 }
 
-char* convertUtf16ToGB2312(const wchar_t* utf16){
+char* convertUtf16ToAnsi(const wchar_t* utf16){
 	int len = WideCharToMultiByte(CP_ACP, 0, utf16, -1, NULL, 0, NULL, NULL);
 	char * str = new char[len + 1];
 	WideCharToMultiByte(CP_ACP, 0, utf16, -1, str, len, NULL, NULL);

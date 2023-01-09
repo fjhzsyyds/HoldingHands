@@ -191,7 +191,7 @@ void CCameraSrv::CameraTerm()
 void CCameraSrv::OnVideoSize(int code, string&err, int width, int height){
 	if (code){
 #ifdef UNICODE
-		wchar_t* error = convertGB2312ToUtf16(err.c_str());
+		wchar_t* error = convertAnsiToUtf16(err.c_str());
 		m_pDlg->SendMessage(WM_CAMERA_ERROR, (WPARAM)error, NULL);
 		delete[] error;
 #else

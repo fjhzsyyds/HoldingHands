@@ -32,7 +32,7 @@ void CCmdSrv::OnClose()
 void CCmdSrv::OnOpen(){
 	m_pWnd = new CCmdWnd(this);
 
-	if (FALSE == m_pWnd->Create(NULL, L"Cmd", WS_OVERLAPPEDWINDOW)){
+	if (!m_pWnd->Create(NULL, L"Cmd", WS_OVERLAPPEDWINDOW)){
 		Close();
 		return;
 	}
@@ -40,8 +40,8 @@ void CCmdSrv::OnOpen(){
 	m_pWnd->GetWindowRect(&rect);
 	rect.right = rect.left + 860;
 	rect.bottom = rect.top + 540;
-	m_pWnd->MoveWindow(&rect);
 
+	m_pWnd->MoveWindow(&rect);
 	m_pWnd->ShowWindow(SW_SHOW);
 	m_pWnd->UpdateWindow();
 }
@@ -70,11 +70,11 @@ void CCmdSrv::OnCmdResult(char*szBuffer)
 {
 	m_pWnd->SendMessage(WM_CMD_RESULT, (WPARAM)szBuffer, 0);
 }
+
 void CCmdSrv::OnCmdBegin(DWORD dwStatu)
 {
 	//ÆôÓÃÊäÈë.
 	if (dwStatu == 0){
-		m_pWnd->m_Cmd.EnableWindow(TRUE);
-		m_pWnd->m_Cmd.SetFocus();
+		m_pWnd->SendMessage(WM_CMD_BEGIN);
 	}
 }

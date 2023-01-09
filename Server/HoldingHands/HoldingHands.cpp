@@ -68,7 +68,6 @@ BOOL CHoldingHandsApp::InitInstance()
 	InitCommonControlsEx(&InitCtrls);
 
 	CWinApp::InitInstance();
-
 	m_pShellManager = new CShellManager;
 
 	// ≥ı ºªØ OLE ø‚
@@ -96,7 +95,9 @@ BOOL CHoldingHandsApp::InitInstance()
 
 	avcodec_register_all();
 	
-	//AllocConsole();
+#ifdef _DEBUG
+	AllocConsole();
+#endif
 
 	//SetConsoleTitle(TEXT("Holding Hands Debug Log"));
 	//DWORD dwWriteBytes = 0;

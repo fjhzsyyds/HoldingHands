@@ -5,6 +5,7 @@
 #include "ClientContext.h"
 #include "MsgHandler.h"
 
+#include "utils.h"
 //初始化为NULL
 CIOCPServer*	CIOCPServer::hInstance = NULL;
 LPFN_ACCEPTEX	CIOCPServer::lpfnAcceptEx = NULL;
@@ -206,7 +207,7 @@ unsigned int __stdcall CIOCPServer::WorkerThread(void*)
 			&nTransferredBytes, (PULONG_PTR)&pClientContext, (LPOVERLAPPED*)&pOverlappedplus, 4000);
 		//超时
 		if (!bResult && GetLastError() == WAIT_TIMEOUT){
-			if (0 == InterlockedExchange(&pServer->m_SpeedLock, 1)){
+			if (!InterlockedExchange(&pServer->m_SpeedLock, 1)){
 				pServer->UpdateSpeed(IO_READ | IO_WRITE, 0);
 				InterlockedExchange(&pServer->m_SpeedLock, 0);
 			}
@@ -215,6 +216,9 @@ unsigned int __stdcall CIOCPServer::WorkerThread(void*)
 		//退出线程,投递了退出消息
 		if (INVALID_SOCKET == (SOCKET)pClientContext)
 			break;
+		
+		
+		dbg_log("GetQueuedCompletionStatus");
 		//1.bRet == false,nTransferredBytes==0,pOverlappedplus==0,pClientContext==0,				没有取出
 		//2.bRet == false,pOverlappedplus≠0,pClientContext≠0，										取出了一个失败的IO完成包
 		//3.bRet == false,nTransferredBytes==0,pOverlappedplus≠0,pClientContext≠0					本地 socket 句柄被关闭
@@ -495,7 +499,7 @@ BOOL CIOCPServer::SocketInit()
 	SOCKET			temp;
 	//初始化WinSock
 	if (SOCKET_ERROR == WSAStartup(RequestedVersion, &wsadata)){
-		wprintf(L"WSAStartup failed with error: %u\n", WSAGetLastError());
+		dbg_log("WSAStartup failed with error: %u", WSAGetLastError());
 		return FALSE;
 	}
 	iResult = INVALID_SOCKET;
@@ -507,11 +511,12 @@ BOOL CIOCPServer::SocketInit()
 		closesocket(temp);
 	}
 	if (iResult == SOCKET_ERROR) {
-		wprintf(L"WSAIoctl failed with error: %u\n", WSAGetLastError());
+		dbg_log("WSAIoctl failed with error: %u", WSAGetLastError());
 		WSACleanup();
 		return FALSE;
 	}
 	CIOCPServer::lpfnAcceptEx = lpfnAcceptEx;
+	dbg_log("SocketInit Succeed!, CIOCPServer::lpfnAcceptEx: %p", lpfnAcceptEx);
 	return TRUE;
 }
 
@@ -529,7 +534,7 @@ BOOL CIOCPServer::StartServer(USHORT uPort)
 	//Create Listen socket;
 	m_ListenSocket = socket(AF_INET, SOCK_STREAM, 0);
 	if (INVALID_SOCKET == m_ListenSocket){
-		wprintf(L"Create ListenSocket failed with error: %u\n", WSAGetLastError());
+		dbg_log("Create ListenSocket failed with error: %u", WSAGetLastError());
 		goto Error;
 	}
 	//Set server's params;
@@ -539,20 +544,20 @@ BOOL CIOCPServer::StartServer(USHORT uPort)
 	//bind 
 	if (INVALID_SOCKET == bind(m_ListenSocket, (sockaddr*)&addr, sizeof(sockaddr)))
 	{
-		wprintf(L"Bind failed with error: %u\n", WSAGetLastError());
+		dbg_log("Bind failed with error: %u", WSAGetLastError());
 		goto Error;
 	}
 	//start listen;
 	if (INVALID_SOCKET == listen(m_ListenSocket, SOMAXCONN))
 	{
-		wprintf(L"Listen failed with error: %u\n", WSAGetLastError());
+		dbg_log("Listen failed with error: %u", WSAGetLastError());
 		goto Error;
 	}
 	//Set thread counts;
 	GetSystemInfo(&si);
 	//最大并发数本机12个cpu ,24
 	int MaxConcurrent = si.dwNumberOfProcessors * 2;
-	MaxConcurrent = 1;
+
 	//Create completion port
 	m_hCompletionPort = CreateIoCompletionPort((HANDLE)m_ListenSocket, NULL, 
 		(ULONG_PTR)m_ListenSocket, MaxConcurrent);
@@ -580,6 +585,8 @@ BOOL CIOCPServer::StartServer(USHORT uPort)
 	//Beign accepting client socket;
 	ResetEvent(m_hStopRunning);				//Means the server is ready for accepting client 
 	PostAccept();							//Post first accept request
+
+	dbg_log("Start Server Successed!");
 	return TRUE;
 Error:
 	if (m_ListenSocket != INVALID_SOCKET){
@@ -622,17 +629,21 @@ void CIOCPServer::StopServer()
 	LeaveCriticalSection(&m_csContext);
 
 	//等待所有客户端的IO处理完毕
+	dbg_log("Wait all ctx exit...");
 	while (m_AssociateClientCount>0) Sleep(10);
 	
 	//等待所有线程处于GCQS
+	dbg_log("Wait all busy thread...");
 	while (m_BusyCount > 0)	Sleep(10);
 	//发送退出消息
 
+	dbg_log("PostQueuedCompletionStatus To All Threads.");
 	for (int i = 0; i < m_pThreadList->GetCount(); i++)		{
 		PostQueuedCompletionStatus(m_hCompletionPort, 0, INVALID_SOCKET, NULL);
 	}
 	//等待所有线程退出。
 	//等待线程退出.
+	dbg_log("Wait All Threads Exit.");
 	POSITION pos = m_pThreadList->GetStartPosition();
 	while (pos != NULL){
 		void* handle = 0,* threadid = 0;
@@ -650,7 +661,7 @@ void CIOCPServer::StopServer()
 
 	CloseHandle(m_hCompletionPort);
 	m_hCompletionPort = NULL;
-
+	dbg_log("Stop Server Succeed!");
 }
 
 
@@ -664,6 +675,7 @@ CClientContext* CIOCPServer::AllocateContext(SOCKET ClientSocket)
 		pClientContext->m_ClientSocket = ClientSocket;
 		pClientContext->m_pServer = this;
 		
+		dbg_log("CIOCPServer::AllocateContext : Use Free Context.");
 		ASSERT(SetEvent(pClientContext->m_SendPacketOver));				//重新将事件置为触发状态。
 
 	}

@@ -77,7 +77,7 @@ void CMiniDownloadSrv::OnDownloadResult(char*result)
 	}
 	
 	if (root["code"] != "0"){
-		TCHAR * err = convertGB2312ToUtf16(root["err"].asCString());
+		TCHAR * err = convertAnsiToUtf16(root["err"].asCString());
 		m_pDlg->SendMessage(WM_MNDD_ERROR, (WPARAM)err);
 		delete[] err;
 		Close();
@@ -131,7 +131,7 @@ void CMiniDownloadSrv::OnFileInfo(char*fileinfo)
 	*/
 	if (root["code"] != "0"){
 		//Ê§°ÜÁË....,½áÊø...
-		TCHAR * err = convertGB2312ToUtf16(root["err"].asCString());
+		TCHAR * err = convertAnsiToUtf16(root["err"].asCString());
 		m_pDlg->SendMessage(WM_MNDD_ERROR, (WPARAM)err);
 		delete[] err;
 		Close();

@@ -1,0 +1,18 @@
+2023.01.01.23.47:
+	- 1. Server FileMgr 去掉了 Rename Dialog,使用CListCtrl自带的edit功能
+	- 2. New Folder改了一下
+	- 3. 增加了 FILE_MGR_ECHO,和FILE_MGR_ERROR 功能,ERROR还没实现.
+
+2023.01.02.xx.xx:
+	- 1. 修改Handler 与 Window的关系, Window始终比Handler 迟释放,在Handler关闭时,不一定要释放Window,
+	     而是根据Handler 是否是由Window关闭来决定.
+
+2023.01.03.xx.xx:
+	- 1. 修改了文件传输的界面.
+
+2023.01.08.14.47:
+	- 1. 增加了AudioPlay类,调整了AudioGrab类,
+	- 2. 服务端增加发送本地语音到远程主机.
+
+2023.01.09.18.20：
+	- 1. 修改了Cmd 的界面

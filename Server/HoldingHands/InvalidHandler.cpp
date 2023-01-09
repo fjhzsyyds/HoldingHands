@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "InvalidHandler.h"
-
+#include "utils.h"
 
 CInvalidHandler::CInvalidHandler(CManager*pManager):
 CMsgHandler(pManager)
@@ -13,7 +13,7 @@ CInvalidHandler::~CInvalidHandler()
 }
 
 void CInvalidHandler::OnOpen(){
-	//Ö±½Ó¹Ø±Õ...
+	dbg_log("CInvalidHandler::OnOpen()");
 	Close();
 }
 void CInvalidHandler::OnClose(){

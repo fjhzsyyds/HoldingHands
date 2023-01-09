@@ -2,10 +2,10 @@
 #include "CmdWnd.h"
 #include "CmdSrv.h"
 
-CCmdWnd::CCmdWnd(CCmdSrv*pHandler):
-m_DestroyAfterDisconnect(FALSE),
-m_pHandler(pHandler),
-m_LastCommand(NULL)
+CCmdWnd::CCmdWnd(CCmdSrv*pHandler) :
+	m_DestroyAfterDisconnect(FALSE),
+	m_pHandler(pHandler),
+	m_CmdShow(m_pHandler)
 {
 }
 
@@ -13,12 +13,15 @@ m_LastCommand(NULL)
 CCmdWnd::~CCmdWnd()
 {
 }
+
 BEGIN_MESSAGE_MAP(CCmdWnd, CFrameWnd)
 	ON_WM_CREATE()
 	ON_WM_CLOSE()
 	ON_WM_SIZE()
 	ON_MESSAGE(WM_CMD_ERROR,OnError)
 	ON_MESSAGE(WM_CMD_RESULT,OnCmdResult)
+	ON_MESSAGE(WM_CMD_BEGIN,OnCmdBegin)
+	ON_WM_CTLCOLOR()
 END_MESSAGE_MAP()
 
 #define ID_CMD_INPUT		15234
@@ -32,28 +35,12 @@ int CCmdWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	// TODO:  在此添加您专用的创建代码
 	RECT rect;
 	GetClientRect(&rect);
-	//创建字体
-	m_Font.CreateFontW(18, 8, 0, 0, FW_THIN, FALSE, FALSE, 0, DEFAULT_CHARSET, DEFAULT_CHARSET,
-		CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SCRIPT, L"consolas");
-	
+
+	m_BkBrush.CreateSolidBrush(RGB(12, 12, 12));
 	//创建显示框
-	rect.bottom -= 28;
-	m_CmdShow.Create(WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOHSCROLL|ES_READONLY | WS_VSCROLL,
+	m_CmdShow.Create(WS_CHILD | WS_VISIBLE | ES_MULTILINE 
+		| ES_AUTOHSCROLL | WS_VSCROLL,
 		rect, this, ID_CMD_RESULT);
-
-	m_CmdShow.SetFont(&m_Font);
-	m_CmdShow.SetLimitText(0);
-
-	//创建命令输入框.
-	rect.bottom += 28;
-	rect.top = rect.bottom - 28;
-	
-	m_Cmd.Create(WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_WANTRETURN | WS_BORDER, 
-		rect, this, ID_CMD_INPUT);
-	m_Cmd.SetFont(&m_Font);
-
-	m_Cmd.EnableWindow(FALSE);//等对方准备好了在开始
-	//
 	//设置窗口标题
 	CString Title;
 	auto const peer = m_pHandler->GetPeerName();
@@ -98,100 +85,37 @@ void CCmdWnd::OnSize(UINT nType, int cx, int cy)
 	// TODO:  在此处添加消息处理程序代码
 	RECT rect;
 	GetClientRect(&rect);
-	//
-	rect.bottom -= 28;
 	m_CmdShow.MoveWindow(&rect);
-	rect.bottom += 28;
-	rect.top = rect.bottom - 28;
-	m_Cmd.MoveWindow(&rect);
+}
+
+LRESULT CCmdWnd::OnCmdBegin(WPARAM wParam, LPARAM lParam){
+	m_CmdShow.OnCmdBegin();
+	return 0;
 }
 
 LRESULT CCmdWnd::OnCmdResult(WPARAM wParam, LPARAM lParam)
 {
 	char*szBuffer = (char*)wParam;
-	DWORD dwLenght = m_CmdShow.GetWindowTextLengthW();
-	m_CmdShow.SetSel(dwLenght, dwLenght,0);
-	m_CmdShow.ReplaceSel(CA2W(szBuffer));
+	CString strResult = CA2W(szBuffer);
+	m_CmdShow.OnCmdResult(strResult);
 	return 0;
 }
 
 BOOL CCmdWnd::PreTranslateMessage(MSG* pMsg)
 {
-	// TODO:  在此添加专用代码和/或调用基类
-	if (pMsg->message == WM_KEYDOWN)
-	{
-		CWnd*pWnd = GetFocus();
-		if (pWnd && pWnd->GetDlgCtrlID() == ID_CMD_INPUT)
-		{
-			if (pMsg->wParam == VK_RETURN)
-			{
-				//按下回车键了
-				CString Cmd;
-				CStringA aCmd;
-				m_Cmd.GetWindowText(Cmd);		//
-				m_Cmd.SetWindowTextW(L"");		//清空内容.
-				//清屏
-				if (Cmd == L"cls"){
-					m_CmdShow.SetWindowTextW(L"");
-					//buffer[0] = 0;
-					Cmd = L"";
-				}
-				//发送命令
-				aCmd = (CW2A(Cmd));
-				aCmd += "\r\n";
-				if (m_pHandler)
-					m_pHandler->SendMsg(CMD_COMMAND, aCmd.GetBuffer(), aCmd.GetLength() + 1);
-				if (Cmd.GetLength())
-				{
-					//记录一下命令.
-					m_Commands.AddTail(Cmd);
-					m_LastCommand = NULL;
-				}
-				return TRUE;
-			}
-			if (pMsg->wParam == VK_UP)
-			{
-				if (m_LastCommand == NULL)
-					m_LastCommand = m_Commands.GetTailPosition();
-
-				if (m_LastCommand)
-				{
-					m_Cmd.SetWindowTextW(m_Commands.GetAt(m_LastCommand));
-					m_Cmd.SetSel(m_Commands.GetAt(m_LastCommand).GetLength(),
-						-1);
-
-					if (m_LastCommand == m_Commands.GetHeadPosition()){
-						m_LastCommand = m_Commands.GetTailPosition();
-					}
-					else{
-						m_Commands.GetPrev(m_LastCommand);
-					}
-					
-				}
-				return TRUE;
-			}
-			if (pMsg->wParam == VK_DOWN)
-			{
-				if (m_LastCommand == NULL)
-					m_LastCommand = m_Commands.GetTailPosition();
-
-				if (m_LastCommand){
-					m_Cmd.SetWindowTextW(m_Commands.GetAt(m_LastCommand));
-					m_Cmd.SetSel(m_Commands.GetAt(m_LastCommand).GetLength(),
-						-1);
-
-					if (m_LastCommand == m_Commands.GetTailPosition()){
-						m_LastCommand = m_Commands.GetHeadPosition();
-					}
-					else{
-						m_Commands.GetNext(m_LastCommand);
-					}
-				}
-				return TRUE;
-			}
-		}
-	}
 	return CFrameWnd::PreTranslateMessage(pMsg);
 }
 
 
+
+HBRUSH CCmdWnd::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
+{
+	HBRUSH hbr = CFrameWnd::OnCtlColor(pDC, pWnd, nCtlColor);
+
+	// TODO:  如果默认的不是所需画笔，则返回另一个画笔
+	if (nCtlColor == CTLCOLOR_EDIT){
+		pDC->SetBkColor(RGB(12, 12, 12));
+		pDC->SetTextColor(RGB(204,204,204));
+	}
+	return m_BkBrush;
+}

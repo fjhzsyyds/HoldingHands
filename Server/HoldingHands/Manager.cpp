@@ -18,7 +18,7 @@
 #include "KeybdLogSrv.h"
 #include "zlib\zlib.h"
 #include "InvalidHandler.h"
-
+#include "utils.h"
 
 #define ENABLE_COMPRESS 1
 
@@ -245,6 +245,7 @@ void CManager::ProcessCompletedPacket(int type, CClientContext*pCtx, CPacket*pPa
 	}
 
 	if (PACKET_CLIENT_CONNECT == type){
+		dbg_log("PACKET_CLIENT_CONNECT\n");
 		if (!SendMessage(m_pServer->m_hNotifyWnd, 
 			WM_SOCKET_CONNECT, (WPARAM)pCtx, pCtx->m_Identity))
 			pCtx->Disconnect();
@@ -252,6 +253,7 @@ void CManager::ProcessCompletedPacket(int type, CClientContext*pCtx, CPacket*pPa
 	}
 
 	if (PACKET_CLIENT_DISCONNECT == type){
+		dbg_log("PACKET_CLIENT_DISCONNECT\n");
 		SendMessage(m_pServer->m_hNotifyWnd, WM_SOCKET_CLOSE, 
 			(WPARAM)pCtx, pCtx->m_Identity);
 		return;
@@ -263,6 +265,7 @@ void CManager::ProcessCompletedPacket(int type, CClientContext*pCtx, CPacket*pPa
 			pCtx->SendPacket(HEART_BEAT, 0, 0, 0);
 			return;
 		}
+		dbg_log("PACKET_READ_COMPLETED\n");
 		DispatchMsg(pCtx, pPacket);
 		return;
 	}

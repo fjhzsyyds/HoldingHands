@@ -334,7 +334,7 @@ CString CKernelSrv::getIPLocation(const CString & ip_address){
 	httpFile->Read(Buffer, 1024);
 	httpFile->Close();
 	//
-	char* str = convertUTF8ToGB2312(Buffer);
+	char* str = convertUTF8ToAnsi(Buffer);
 	
 	if (Json::Reader().parse(str, info)){
 		string location = "";

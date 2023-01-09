@@ -17,9 +17,9 @@ DWORD getProcessId(TCHAR* szProcessName);
 DWORD getParentProcessId(TCHAR* szProcessName);
 DWORD getParentProcessId(DWORD dwPid);
 
-char* convertUTF8ToGB2312(const char* utf8);
-char* convertGB2312ToUTF8(const char* gb2312);
-char* convertUtf16ToGB2312(const wchar_t* utf16);
-wchar_t* convertGB2312ToUtf16(const char* gb2312);
+char* convertUTF8ToAnsi(const char* utf8);
+char* convertAnsiToUTF8(const char* gb2312);
+char* convertUtf16ToAnsi(const wchar_t* utf16);
+wchar_t* convertAnsiToUtf16(const char* gb2312);
 void GetProcessDirectory(TCHAR* szPath);;
 #endif

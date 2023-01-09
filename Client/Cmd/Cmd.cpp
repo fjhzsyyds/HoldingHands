@@ -74,7 +74,7 @@ void CCmd::OnClose()
 	}
 	//线程ReadFile会结束，等待线程退出。;
 	std::cout << __LINE__ << "线程ReadFile会结束，等待线程退出。;" << std::endl;
-	if(WAIT_TIMEOUT == WaitForSingleObject(m_hReadThread, 60000)){
+	if(WAIT_TIMEOUT == WaitForSingleObject(m_hReadThread, 30000)){
 		TerminateThread(m_hReadThread,0);
 		WaitForSingleObject(m_hReadThread, INFINITE);
 	}

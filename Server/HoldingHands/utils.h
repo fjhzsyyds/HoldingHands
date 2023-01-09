@@ -15,14 +15,16 @@ BOOL MakesureDirExist(const TCHAR* Path, BOOL bIncludeFileName);
 
 void GetStorageSizeString(LARGE_INTEGER Bytes, TCHAR* strBuffer);
 
-char* convertUTF8ToGB2312(const char* utf8);
+char* convertUTF8ToAnsi(const char* utf8);
 
-char* convertGB2312ToUTF8(const char* gb2312);
+char* convertAnsiToUTF8(const char* gb2312);
 
-char* convertUtf16ToGB2312(const wchar_t* utf16);
+char* convertUtf16ToAnsi(const wchar_t* utf16);
 
-wchar_t* convertGB2312ToUtf16(const char* gb2312);
+wchar_t* convertAnsiToUtf16(const char* gb2312);
 
 void GetProcessDirectory(TCHAR* szPath);
+
+void dbg_log(const char * format, ...);
 
 #endif
