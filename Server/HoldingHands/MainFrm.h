@@ -55,6 +55,8 @@ private:  // 控件条嵌入成员
 	DWORD			  m_View;
 	DWORD			  m_ServerStatu;
 	BOOL			  m_bExitAfterStop;
+
+	CManager*		  m_pManager;
 	//服务器
 	CIOCPServer*	  m_pServer;
 	//

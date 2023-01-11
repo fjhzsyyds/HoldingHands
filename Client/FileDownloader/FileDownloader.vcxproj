@@ -49,7 +49,7 @@
     <LinkIncremental>false</LinkIncremental>
     <IncludePath>..\Common;$(IncludePath)</IncludePath>
     <SourcePath>..\Common;$(SourcePath)</SourcePath>
-    <OutDir>..\..\..\server\modules</OutDir>
+    <OutDir>..\..\Server\modules</OutDir>
     <TargetName>filedownloader</TargetName>
     <LibraryPath>$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);..\Common</LibraryPath>
   </PropertyGroup>

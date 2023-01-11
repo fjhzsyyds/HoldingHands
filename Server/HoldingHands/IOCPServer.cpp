@@ -11,10 +11,10 @@ CIOCPServer*	CIOCPServer::hInstance = NULL;
 LPFN_ACCEPTEX	CIOCPServer::lpfnAcceptEx = NULL;
 
 //创建一个服务器实例
-CIOCPServer* CIOCPServer::CreateServer(HWND hNotifyWnd)
+CIOCPServer* CIOCPServer::CreateServer(CManager* pManager)
 {
 	if (hInstance == NULL){
-		hInstance = new CIOCPServer(hNotifyWnd);
+		hInstance = new CIOCPServer(pManager);
 	}
 	return hInstance;
 }
@@ -27,13 +27,13 @@ void CIOCPServer::DeleteServer()
 	}
 }
 
-CIOCPServer::CIOCPServer(HWND hWnd)
+CIOCPServer::CIOCPServer(CManager* pManager)
 {
-	m_hNotifyWnd = hWnd;
 	//Listen Socket
 	m_ListenSocket = INVALID_SOCKET;
 	//Accept Socket
 	m_AcceptSocket = INVALID_SOCKET;
+
 	memset(m_AcceptBuf, 0, sizeof(m_AcceptBuf));
 	//Context:
 	m_pClientContextList = new CPtrList;
@@ -45,9 +45,7 @@ CIOCPServer::CIOCPServer(HWND hWnd)
 	//
 	m_hStopRunning = CreateEvent(0, TRUE, TRUE, NULL);			//初始状态是TRUE,已经停止
 	//Event Dispatch
-	m_pManager = new CManager(this);
-	m_pManager->m_pServer = this;
-
+	m_pManager = pManager;
 
 	m_pThreadList = new CMapPtrToPtr;
 	m_BusyCount = 0;
@@ -93,10 +91,8 @@ CIOCPServer::~CIOCPServer()
 	}
 	DeleteCriticalSection(&m_csThread);
 	//
-	if (m_pManager){
-		delete m_pManager;
-		m_pManager = NULL;
-	}
+	m_pManager = NULL;
+
 	//
 	if (m_hStopRunning){
 		CloseHandle(m_hStopRunning);
@@ -128,13 +124,12 @@ BOOL CIOCPServer::RemoveFromList(CClientContext*pContext)
 	LeaveCriticalSection(&m_csContext);
 	return bRet;
 }
-DWORD CIOCPServer::GetReadSpeed()
+void CIOCPServer::GetSpeed(DWORD *lpReadSpeed , DWORD*lpWriteSpeed )
 {
-	return m_ReadSpeed;
-}
-DWORD CIOCPServer::GetWriteSpeed()
-{
-	return m_WriteSpeed;
+	if (lpReadSpeed)
+		*lpReadSpeed = m_ReadSpeed;
+	if (lpWriteSpeed)
+		*lpWriteSpeed = m_WriteSpeed;
 }
 
 void CIOCPServer::UpdateSpeed(DWORD io_type, DWORD TranferredBytes)
@@ -152,7 +147,7 @@ void CIOCPServer::UpdateSpeed(DWORD io_type, DWORD TranferredBytes)
 		dwReadBytes += TranferredBytes;
 		if (dwCurTime - LastUpdateReadTime >= 1000)
 		{
-			InterlockedExchange(&m_ReadSpeed, dwReadBytes/(dwCurTime - LastUpdateReadTime));
+			InterlockedExchange(&m_ReadSpeed, dwReadBytes);			//如果超过一秒了,就更新Read Speed 为刚才的1 s内读取的字节数.
 			dwReadBytes = 0;
 			LastUpdateReadTime = dwCurTime;
 		}
@@ -162,7 +157,7 @@ void CIOCPServer::UpdateSpeed(DWORD io_type, DWORD TranferredBytes)
 		dwWriteBytes += TranferredBytes;
 		if (dwCurTime - LastUpdateWriteTime >= 1000)
 		{
-			InterlockedExchange(&m_WriteSpeed, dwWriteBytes/(dwCurTime - LastUpdateWriteTime));
+			InterlockedExchange(&m_WriteSpeed, dwWriteBytes);
 			dwWriteBytes = 0;			//刷新
 			LastUpdateWriteTime = dwCurTime;
 		}
@@ -217,8 +212,7 @@ unsigned int __stdcall CIOCPServer::WorkerThread(void*)
 		if (INVALID_SOCKET == (SOCKET)pClientContext)
 			break;
 		
-		
-		dbg_log("GetQueuedCompletionStatus");
+	
 		//1.bRet == false,nTransferredBytes==0,pOverlappedplus==0,pClientContext==0,				没有取出
 		//2.bRet == false,pOverlappedplus≠0,pClientContext≠0，										取出了一个失败的IO完成包
 		//3.bRet == false,nTransferredBytes==0,pOverlappedplus≠0,pClientContext≠0					本地 socket 句柄被关闭
@@ -236,6 +230,7 @@ unsigned int __stdcall CIOCPServer::WorkerThread(void*)
 			if (WSAGetLastError() == 995)
 				dwResult |= _FLAG_IO_ABORTED;
 
+
 			/*
 				处理IO_READ,IO_WRITE,IO_ACCEPT;
 				此处需要。简单的线程调度,若nBusyCount == ThreadCount,那么就创建一个新的线程
@@ -244,7 +239,7 @@ unsigned int __stdcall CIOCPServer::WorkerThread(void*)
 				端口使用.否则新的线程没什么作用,始终处于挂起状态.原因是为了保证最大并发数量小于 初始设定值。
 			*/
 			//update speed
-			if (0 == InterlockedExchange(&pServer->m_SpeedLock, 1)){
+			if (!InterlockedExchange(&pServer->m_SpeedLock, 1)){
 				if (pOverlappedplus != NULL && (pOverlappedplus->m_IOtype == IO_READ
 					|| pOverlappedplus->m_IOtype == IO_WRITE)){
 					pServer->UpdateSpeed(pOverlappedplus->m_IOtype, nTransferredBytes);
@@ -276,6 +271,7 @@ unsigned int __stdcall CIOCPServer::WorkerThread(void*)
 			
 			//检测socket是否断开连接.
 			if (pOverlappedplus->m_IOtype == IO_READ && dwResult){
+				dbg_log("disconnect ,reason : %d", dwResult);
 				pClientContext->Disconnect();
 				pServer->RemoveFromList(pClientContext);
 				//处理IO_CLOSE
@@ -346,6 +342,7 @@ void CIOCPServer::PostRead(CClientContext*pClientContext)
 	//IO错误,该SOCKET被关闭了,或者buff为NULL;
 	if (nIORet == SOCKET_ERROR	&& nErrorCode != WSA_IO_PENDING){
 		//将这个标记为手动投递的
+		dbg_log("CIOCPServer::PostRead WSARecv Failed with : %d ", nErrorCode);
 		pOverlapped->m_bManualPost = TRUE;
 		PostQueuedCompletionStatus(m_hCompletionPort, 0, (ULONG_PTR)pClientContext, (LPOVERLAPPED)pOverlapped);
 	}
@@ -367,6 +364,7 @@ void CIOCPServer::PostWrite(CClientContext*pClientContext)
 	//IO错误,该SOCKET被关闭了,或者buff为NULL;
 	if (nIORet == SOCKET_ERROR	&& nErrorCode != WSA_IO_PENDING){
 		//将这个标记为手动投递的
+		dbg_log("CIOCPServer::PostWrite WSASend Failed with : %d ", nErrorCode);
 		pOverlapped->m_bManualPost = TRUE;
 		PostQueuedCompletionStatus(m_hCompletionPort, 0, (ULONG_PTR)pClientContext, (LPOVERLAPPED)pOverlapped);
 	}
@@ -483,6 +481,7 @@ void CIOCPServer::PostAccept()
 	if (bAcceptRet == FALSE && nErrorCode != WSA_IO_PENDING){
 		//Post accept error,m_bManualPost == TRUE means PostAcceptError,
 		//then the valid socket will be closed by OnAcceptCompletion
+		dbg_log("CIOCPServer::PostAccept lpfnAcceptEx Failed with %d", nErrorCode);
 		pOverlappedPlus->m_bManualPost = TRUE;
 		PostQueuedCompletionStatus(m_hCompletionPort, 0, (ULONG_PTR)m_ListenSocket, (OVERLAPPED*)pOverlappedPlus);
 	}
@@ -722,33 +721,55 @@ void CIOCPServer::FreeContext(CClientContext*pContext){
 }
 
 
+#define IOCP_START_SRV	1
+#define IOCP_STOP_SRV	0
 
-void CIOCPServer::async_svr_ctrl_proc(DWORD dwParam)
+void CIOCPServer::async_svr_ctrl_proc(LPVOID * ArgList)
 {
-	DWORD dwResult = 0;
-	CIOCPServer*pServer = CIOCPServer::CreateServer(NULL);
+	CIOCPServer * pThis = (CIOCPServer*)ArgList[0];
+	int				Opt	= (int)ArgList[1];
+	HWND	hNotifyWnd	= (HWND)ArgList[2];
 	
-	if (HIWORD(dwParam) == 1){
-		dwResult = pServer->StartServer(LOWORD(dwParam));
-		SendMessage(pServer->m_hNotifyWnd, WM_IOCPSVR_START, dwResult, 0);
+	if (Opt == IOCP_START_SRV){
+		DWORD Port = (DWORD)ArgList[3];
+		DWORD Result = pThis->StartServer(Port);
+		SendMessage(hNotifyWnd, WM_IOCP_SRV_START, Result, 0);
 	}
-	else{
-		pServer->StopServer();
-		SendMessage(pServer->m_hNotifyWnd,WM_IOCPSVR_CLOSE, dwResult, 0);
-	}	
+	else if (Opt == IOCP_STOP_SRV){
+		pThis->StopServer();
+		SendMessage(hNotifyWnd, WM_IOCP_SRV_CLOSE, 0, 0);
+	}
+	delete[] ArgList;
 }
 
-void CIOCPServer::AsyncStopSrv()
+
+void CIOCPServer::AsyncStopSrv(HWND hNotifyWnd)
 {
-	HANDLE hThread = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)async_svr_ctrl_proc, 0, 0, 0);
+	LPVOID * ArgList = new LPVOID[3];
+
+	ArgList[0] = this;
+	ArgList[1] = (LPVOID)IOCP_STOP_SRV;
+	ArgList[2] = (LPVOID)hNotifyWnd;
+
+	HANDLE hThread = CreateThread(NULL, NULL, 
+		(LPTHREAD_START_ROUTINE)async_svr_ctrl_proc, ArgList, 0, 0);
 	if (hThread){
 		CloseHandle(hThread);
 	}
 }
 
-void CIOCPServer::AsyncStartSrv(USHORT Port)
+void CIOCPServer::AsyncStartSrv(HWND hNotifyWnd,USHORT Port)
 {
-	HANDLE hThread = CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)async_svr_ctrl_proc,(void*)(0x00010000 | Port), 0, 0);
+	LPVOID * ArgList = new LPVOID[4];
+
+	ArgList[0] = this;
+	ArgList[1] = (LPVOID)IOCP_START_SRV;
+	ArgList[2] = (LPVOID)hNotifyWnd;
+	ArgList[3] = (LPVOID)Port;
+
+	HANDLE hThread = CreateThread(NULL, NULL, 
+		(LPTHREAD_START_ROUTINE)async_svr_ctrl_proc, ArgList, 0, 0);
+
 	if (hThread){
 		CloseHandle(hThread);
 	}

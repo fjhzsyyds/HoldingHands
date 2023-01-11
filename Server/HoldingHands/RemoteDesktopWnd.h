@@ -8,6 +8,8 @@ class CRemoteDesktopSrv;
 #define WM_REMOTE_DESKTOP_DRAW			(WM_USER + 70)
 
 #define WM_REMOTE_DESKTOP_SET_CLIPBOARD_TEXT	(WM_USER + 72)
+
+#define WM_REMOTE_DESKTOP_SCREENSHOT	(WM_USER + 73)
 #define SCROLL_UINT		5.0
 
 #define CONTROL_MOUSE (0x1)
@@ -24,6 +26,10 @@ class CRemoteDesktopWnd :
 	public CFrameWnd
 {
 public:
+
+	//BOOL m_IsBusy;
+
+	//
 	BOOL m_DestroyAfterDisconnect;
 	CRemoteDesktopSrv*m_pHandler;
 	//FPS 
@@ -43,6 +49,9 @@ public:
 	DWORD	m_dwCaptureFlags;
 	// CONTROL
 	BOOL m_ControlFlags;		//
+
+	DWORD	m_dwMaxpFps;
+	DWORD	m_dwQuality;
 
 	CMenu	m_Menu;
 	CStringA m_SetClipbdText;		//自己设置的内容;
@@ -76,8 +85,8 @@ public:
 	LRESULT OnError(WPARAM wParam, LPARAM lParam);
 	LRESULT OnDesktopSize(WPARAM wParam, LPARAM lParam);
 	LRESULT OnSetClipbdText(WPARAM wParam, LPARAM lParam);
+	LRESULT OnScreenShot(WPARAM wParam, LPARAM lParam);
 
-	virtual BOOL OnWndMsg(UINT message, WPARAM wParam, LPARAM lParam, LRESULT* pResult);
 	afx_msg void OnSize(UINT nType, int cx, int cy);
 	virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
 	afx_msg void OnGetMinMaxInfo(MINMAXINFO* lpMMI);
@@ -96,5 +105,11 @@ public:
 	afx_msg void OnDisplayFullscreen();
 	afx_msg void OnOtherScreenshot();
 	virtual void PostNcDestroy();
+	virtual BOOL PreTranslateMessage(MSG* pMsg);
+	
+	//afx_msg void OnTimer(UINT_PTR nIDEvent);
+	afx_msg void OnQualityLow();
+	afx_msg void OnQualityHigh();
+
 };
 

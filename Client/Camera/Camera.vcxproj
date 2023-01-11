@@ -50,7 +50,7 @@
     <IncludePath>..\Common;$(IncludePath)</IncludePath>
     <LibraryPath>..\Common;$(LibraryPath)</LibraryPath>
     <SourcePath>..\Common;$(SourcePath)</SourcePath>
-    <OutDir>..\..\..\server\modules</OutDir>
+    <OutDir>..\..\Server\modules</OutDir>
     <TargetName>camera</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -91,6 +91,7 @@
     <ClCompile Include="..\Common\Manager.cpp" />
     <ClCompile Include="..\Common\MsgHandler.cpp" />
     <ClCompile Include="..\Common\Packet.cpp" />
+    <ClCompile Include="..\Common\utils.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="CameraGrab.cpp" />
     <ClCompile Include="main.cpp" />

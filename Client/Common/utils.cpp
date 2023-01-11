@@ -1,30 +1,32 @@
+#include "stdafx.h"
 #include "utils.h"
+
 BOOL MakesureDirExist(const TCHAR* Path, BOOL bIncludeFileName = FALSE)
 {
-	TCHAR*pTempDir = (TCHAR*)malloc((lstrlenW(Path) + 1)*sizeof(TCHAR));
+	TCHAR*pTempDir = (TCHAR*)malloc((lstrlen(Path) + 1)*sizeof(TCHAR));
 	lstrcpy(pTempDir, Path);
 	BOOL bResult = FALSE;
 	TCHAR* pIt = NULL;
-	//æ‰¾åˆ°æ–‡ä»¶å.;
+	//ÕÒµ½ÎÄ¼şÃû.;
 	if (bIncludeFileName){
-		pIt = pTempDir + lstrlenW(pTempDir) - 1;
+		pIt = pTempDir + lstrlen(pTempDir) - 1;
 		while (pIt[0] != '\\' && pIt[0] != '/' && pIt > pTempDir) pIt--;
 		if (pIt[0] != '/' && pIt[0] != '\\')
 			goto Return;
 		//'/' ---> 0
 		pIt[0] = 0;
 	}
-	//æ‰¾åˆ°':';
+	//ÕÒµ½':';
 	if ((pIt = wcsstr(pTempDir, L":")) == NULL || (pIt[1] != '\\' && pIt[1] != '/'))
 		goto Return;
 	pIt++;
 
 	while (pIt[0]){
 		TCHAR oldCh;
-		//è·³è¿‡'/'æˆ–'\\';
+		//Ìø¹ı'/'»ò'\\';
 		while (pIt[0] && (pIt[0] == '\\' || pIt[0] == '/'))
 			pIt++;
-		//æ‰¾åˆ°ç»“å°¾.;
+		//ÕÒµ½½áÎ².;
 		while (pIt[0] && (pIt[0] != '\\' && pIt[0] != '/'))
 			pIt++;
 		//
@@ -44,7 +46,7 @@ Return:
 
 static TCHAR* MemUnits[] =
 {
-	TEXT("Byte"),
+	TEXT("B"),
 	TEXT("KB"),
 	TEXT("MB"),
 	TEXT("GB"),
@@ -161,7 +163,7 @@ char* convertAnsiToUTF8(const char* gb2312)
 
 wchar_t* convertAnsiToUtf16(const char* gb2312){
 	int len = MultiByteToWideChar(CP_ACP, 0, gb2312, -1, NULL, 0);
-	wchar_t * wstr = new wchar_t[len + 1]; 
+	wchar_t * wstr = new wchar_t[len + 1];
 	MultiByteToWideChar(CP_ACP, 0, gb2312, -1, wstr, len);
 	return wstr;
 }
@@ -173,8 +175,7 @@ char* convertUtf16ToAnsi(const wchar_t* utf16){
 	return str;
 }
 
-
-/* è·å–exe æ‰€åœ¨çš„ç›®å½• */
+/* »ñÈ¡exe ËùÔÚµÄÄ¿Â¼ */
 void GetProcessDirectory(TCHAR* szPath){
 	HMODULE hMod = GetModuleHandle(0);
 	TCHAR szModuleFileName[MAX_PATH];
@@ -192,3 +193,37 @@ void GetProcessDirectory(TCHAR* szPath){
 		lstrcpy(szPath, szModuleFileName);
 	}
 }
+
+
+#ifdef _DEBUG
+#include <stdio.h>
+#include <stdarg.h>
+
+void dbg_log(const char * format, ...){
+	char buffer[0x2000];
+	char date[0x100];
+	char log[0x1f00];
+
+	va_list list;
+	va_start(list, format);
+	vsnprintf(log, 0x1f00, format, list);
+	va_end(list);
+
+
+	time_t t = time(NULL);
+	tm*pTm = localtime(&t);
+	sprintf(date, "[%d/%d/%d %d:%d:%d] ", 1900 + pTm->tm_year, 1 + pTm->tm_mon,
+		pTm->tm_mday, pTm->tm_hour, pTm->tm_min, pTm->tm_sec);
+
+	sprintf(buffer, "%s %s \r\n", date, log);
+
+	HANDLE hFile = GetStdHandle(STD_OUTPUT_HANDLE);
+	DWORD dwWriteBytes = 0;
+
+	WriteFile(hFile, buffer, strlen(buffer), &dwWriteBytes, 0);
+}
+#else
+void dbg_log(const char * format, ...){
+
+}
+#endif

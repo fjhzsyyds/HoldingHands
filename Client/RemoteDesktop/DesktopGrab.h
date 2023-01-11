@@ -39,10 +39,12 @@ private:
 	
 	void	DrawMouse();
 public:
-	BOOL	GrabInit();
+	BOOL	GrabInit(DWORD dwFps,DWORD Quality);
 	void	GrabTerm();
 	void	GetDesktopSize(DWORD *pWidth, DWORD*pHeight);
 	BOOL	GetFrame(char**ppbuffer,DWORD*pSize,DWORD dwCaptureFlags);
+
+	BOOL	GetBmpFile(char**lppBuffer, DWORD*lpSize);
 	CDesktopGrab();
 	~CDesktopGrab();
 };

@@ -48,7 +48,7 @@ public:
 	void handler_init();
 	void handler_term();
 
-	BOOL SendMsg(WORD Msg, char*data, size_t len);
+	BOOL SendMsg(WORD Msg, char*data, size_t len,BOOL Compress);
 	void Close();
 
 	const pair<string, unsigned short> GetPeerName();

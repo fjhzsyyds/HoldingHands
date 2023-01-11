@@ -29,8 +29,8 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_MAIN_STARTSERVER, &CMainFrame::OnMainStartserver)
 	ON_UPDATE_COMMAND_UI(ID_MAIN_STARTSERVER, &CMainFrame::OnUpdateMainStartserver)
 
-	ON_MESSAGE(WM_IOCPSVR_START, OnSvrStarted)
-	ON_MESSAGE(WM_IOCPSVR_CLOSE, OnSvrStopped)
+	ON_MESSAGE(WM_IOCP_SRV_START, OnSvrStarted)
+	ON_MESSAGE(WM_IOCP_SRV_CLOSE, OnSvrStopped)
 
 	//创建Handler对象
 	ON_MESSAGE(WM_SOCKET_CONNECT,OnSocketConnect)
@@ -80,6 +80,9 @@ CMainFrame::CMainFrame()
 	m_bExitAfterStop = FALSE;
 	m_listenPort = 10086;
 
+	m_pServer = NULL;
+	m_pManager = NULL;
+
 	TCHAR szPath[MAX_PATH];
 	GetProcessDirectory(szPath);
 	CString strPath(szPath);
@@ -89,6 +92,12 @@ CMainFrame::CMainFrame()
 
 CMainFrame::~CMainFrame()
 {
+	//释放资源..
+	CIOCPServer::DeleteServer();
+	if (m_pManager){
+		delete m_pManager;
+	}
+
 	TCHAR szPath[MAX_PATH];
 	GetProcessDirectory(szPath);
 	CString strPath(szPath);
@@ -118,8 +127,8 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_wndStatusBar.SetPaneInfo(0, ID_SERVER_STATU, SBPS_STRETCH, 0);
 	m_wndStatusBar.SetPaneInfo(1, ID_HOST_COUNT, SBPS_NORMAL, 120);
 	m_wndStatusBar.SetPaneInfo(2, ID_HOST_SELECTED, SBPS_NORMAL, 120);
-	m_wndStatusBar.SetPaneInfo(3, ID_UPLOAD_SPEED, SBPS_NORMAL, 160);
-	m_wndStatusBar.SetPaneInfo(4, ID_DOWNLOAD_SPEED, SBPS_NORMAL, 160);
+	m_wndStatusBar.SetPaneInfo(3, ID_UPLOAD_SPEED, SBPS_NORMAL, 180);
+	m_wndStatusBar.SetPaneInfo(4, ID_DOWNLOAD_SPEED, SBPS_NORMAL, 180);
 	m_wndStatusBar.SetPaneInfo(5, ID_CUR_DATE, SBPS_NORMAL, 160);
 
 	if (!m_ClientList.Create(WS_CHILD | WS_VISIBLE | WS_BORDER | LVS_REPORT,
@@ -132,9 +141,8 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_View |= (VIEW_SHOW_CLIENLIST);
 	m_ServerStatu = SVR_STATU_STOPPED;
 
-	//创建服务器
-	CIOCPServer::SocketInit();
-	m_pServer = CIOCPServer::CreateServer(m_hWnd);
+	m_pManager = new CManager(m_hWnd);
+	m_pServer = CIOCPServer::CreateServer(m_pManager);
 	
 	//用于刷新数据的计时器
 	SetTimer(10086, 1000, NULL);
@@ -205,16 +213,24 @@ void CMainFrame::OnUpdateStatuBar()
 	PaneText = time.Format("[%Y-%m-%d %H:%M:%S]");
 	m_wndStatusBar.SetPaneText(5, PaneText);
 	//更新上传,下载速度.
-	DWORD UpSpeed = 0, DoSpeed = 0;
+	LARGE_INTEGER liReadSpeed, liWriteSpeed;
+	liReadSpeed.QuadPart = 0, liWriteSpeed.QuadPart = 0;
+	TCHAR szReadSpeed[128], szWriteSpeed[128];
+
 	if (m_pServer){
-		UpSpeed = m_pServer->GetWriteSpeed();
-		DoSpeed = m_pServer->GetReadSpeed();
+		m_pServer->GetSpeed(&liReadSpeed.LowPart, &liWriteSpeed.LowPart);
 	}
-	PaneText.Format(TEXT("Upload: %dKB/S"), UpSpeed);
+
+	GetStorageSizeString(liReadSpeed,szReadSpeed);
+	GetStorageSizeString(liWriteSpeed, szWriteSpeed);
+
+	PaneText.Format(TEXT("Upload: %s/S"), szWriteSpeed);
 	m_wndStatusBar.SetPaneText(3, PaneText);
 
-	PaneText.Format(TEXT("Download: %dKB/s"), DoSpeed);
+	PaneText.Format(TEXT("Download: %s/s"), szReadSpeed);
 	m_wndStatusBar.SetPaneText(4, PaneText);
+
+
 
 	//HostCount
 	PaneText.Format(TEXT("Host: %d"), m_ClientList.GetItemCount());
@@ -250,11 +266,11 @@ void CMainFrame::OnMainStartserver()
 		m_ServerStatu = SVR_STATU_STOPPING;
 		//移除所有客户端
 		m_ClientList.DeleteAllItems();
-		m_pServer->AsyncStopSrv();
+		m_pServer->AsyncStopSrv(m_hWnd);
 	}
 	if (m_ServerStatu == SVR_STATU_STOPPED){
 		m_ServerStatu = SVR_STATU_STARTING;
-		m_pServer->AsyncStartSrv(m_listenPort);
+		m_pServer->AsyncStartSrv(m_hWnd,m_listenPort);
 	}
 }
 
@@ -296,7 +312,7 @@ void CMainFrame::OnClose()
 	//关闭服务器.(如果已经关闭了也没事,也会继续通知的)
 	m_ServerStatu = SVR_STATU_STOPPING;
 	m_bExitAfterStop = TRUE;
-	m_pServer->AsyncStopSrv();
+	m_pServer->AsyncStopSrv(m_hWnd);
 }
 
 
@@ -324,8 +340,6 @@ LRESULT CMainFrame::OnSvrStopped(WPARAM wParam, LPARAM lParam)
 	//退出程序
 	if (m_bExitAfterStop){
 
-		//在这里做一些清理的工作
-		CIOCPServer::DeleteServer();
 		m_pServer = NULL;
 		KillTimer(10086);
 		//clean:

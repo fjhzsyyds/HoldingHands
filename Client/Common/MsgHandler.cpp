@@ -12,8 +12,8 @@ CMsgHandler::CMsgHandler(CManager*pManager,DWORD dwIdentity):
 CMsgHandler::~CMsgHandler(){
 }
 
-BOOL CMsgHandler::SendMsg(WORD Msg,void *data, int len){
-	return m_pManager->SendMsg(Msg, (char*)data, len);
+BOOL CMsgHandler::SendMsg(WORD Msg,void *data, int len,BOOL Compress){
+	return m_pManager->SendMsg(Msg, (char*)data, len, Compress);
 }
 
 void CMsgHandler::Close(){

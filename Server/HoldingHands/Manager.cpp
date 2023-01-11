@@ -30,9 +30,9 @@
 #pragma comment(lib,"zlib.lib")
 #endif
 
-CManager::CManager(CIOCPServer*pServer)
+CManager::CManager(HWND hNotifyWnd):
+	m_hNotifyWnd(hNotifyWnd)
 {
-	m_pServer = pServer;
 	InitializeCriticalSectionAndSpinCount(&m_cs, 4000);
 }
 
@@ -147,6 +147,7 @@ BOOL CManager::handler_init(CClientContext*pClientContext, DWORD Identity)
 		pHandler = new CInvalidHandler(this);
 		break;
 	}
+
 	ASSERT(pHandler);	
 	add(pClientContext, pHandler);
 	//
@@ -195,12 +196,13 @@ BOOL CManager::SendMsg(CMsgHandler*pHandler, WORD Msg, char*data, size_t len){
 			//失败的话就不压缩....
 			delete[] compreeBuffer;
 		}
-
 	}
+
 	pCtx->SendPacket(Msg, (const char*)source, source_len, dwFlag);
 	if (dwFlag & MSG_COMPRESS){
 		delete[] source;
-	}	return TRUE;
+	}	
+	return TRUE;
 }
 
 void CManager::DispatchMsg(CClientContext*pContext,CPacket*pPkt){
@@ -246,7 +248,7 @@ void CManager::ProcessCompletedPacket(int type, CClientContext*pCtx, CPacket*pPa
 
 	if (PACKET_CLIENT_CONNECT == type){
 		dbg_log("PACKET_CLIENT_CONNECT\n");
-		if (!SendMessage(m_pServer->m_hNotifyWnd, 
+		if (!SendMessage(m_hNotifyWnd,
 			WM_SOCKET_CONNECT, (WPARAM)pCtx, pCtx->m_Identity))
 			pCtx->Disconnect();
 		return;
@@ -254,7 +256,7 @@ void CManager::ProcessCompletedPacket(int type, CClientContext*pCtx, CPacket*pPa
 
 	if (PACKET_CLIENT_DISCONNECT == type){
 		dbg_log("PACKET_CLIENT_DISCONNECT\n");
-		SendMessage(m_pServer->m_hNotifyWnd, WM_SOCKET_CLOSE, 
+		SendMessage(m_hNotifyWnd, WM_SOCKET_CLOSE,
 			(WPARAM)pCtx, pCtx->m_Identity);
 		return;
 	}
@@ -265,7 +267,7 @@ void CManager::ProcessCompletedPacket(int type, CClientContext*pCtx, CPacket*pPa
 			pCtx->SendPacket(HEART_BEAT, 0, 0, 0);
 			return;
 		}
-		dbg_log("PACKET_READ_COMPLETED\n");
+		//dbg_log("PACKET_READ_COMPLETED\n");
 		DispatchMsg(pCtx, pPacket);
 		return;
 	}

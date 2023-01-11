@@ -7,3 +7,4 @@ Debug
 *.ipch
 ipch
 client_exe
+data

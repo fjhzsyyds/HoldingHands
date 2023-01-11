@@ -109,9 +109,6 @@ private:
 	void HandlerIOMsg(CClientContext*pClientContext, DWORD nTransferredBytes, DWORD IoType, DWORD dwFailedReason);
 	
 
-
-
-
 	//投递一个Accept请求
 	void PostAccept();
 	//投递一个ReadIO请求
@@ -126,39 +123,39 @@ private:
 	static unsigned int __stdcall WorkerThread(void*);
 	//只允许创建一个实例
 
-	CIOCPServer(HWND hWnd);
+	CIOCPServer(CManager* pManager);
 	~CIOCPServer();
-	//通知主窗口创建相应的Handler
-	HWND		m_hNotifyWnd;
+
 	static CIOCPServer* hInstance;
-	static void CIOCPServer::async_svr_ctrl_proc(DWORD dwParam);
+	static void CIOCPServer::async_svr_ctrl_proc(LPVOID * ArgList);
 	
 	
 public:
 	static BOOL SocketInit();						//初始化WSASocket
 	static void SocketTerm();						//清理WSASocket
 	
-#define WM_IOCPSVR_START	(WM_USER+101)
-#define WM_IOCPSVR_CLOSE	(WM_USER+102)
+#define WM_IOCP_SRV_START	(WM_USER+101)
+#define WM_IOCP_SRV_CLOSE	(WM_USER+102)
 
 	//下面三个函数应该在同一个线程里面执行
 	//-------------------------------------------------------------------------------
-	DWORD GetWriteSpeed();
-	DWORD GetReadSpeed();
+	void GetSpeed(DWORD *lpReadSpeed = NULL,DWORD*lpWriteSpeed = NULL);
+
 	//开启服务器
 	BOOL StartServer(USHORT Port);
 	//关闭服务器
 	void StopServer();
+
 	//由于StartSvr 和 StopSvr需要一些时间,增加异步操作
-	void AsyncStartSrv(USHORT Prot);
+	void AsyncStartSrv(HWND hNotifyWnd,USHORT Prot);
 	//
-	void AsyncStopSrv();
+	void AsyncStopSrv(HWND hNotifyWnd);
 	//-------------------------------------------------------------------------------
 	CManager * GetMsgManager(){
 		return m_pManager;
 	}
 
-	static CIOCPServer* CreateServer(HWND hNotifyWnd);
+	static CIOCPServer* CreateServer(CManager* pManager);
 	static void DeleteServer();
 };
 

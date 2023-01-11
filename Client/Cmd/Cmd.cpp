@@ -63,22 +63,45 @@ void __stdcall ReadThread(CCmd*pCmd)
 	pCmd->Close();
 }
 
+#include "utils.h"
+#include <TlHelp32.h>
+
 void CCmd::OnClose()
 {
 	//关掉cmd.;
 	if (m_pi.hProcess != NULL){
+
+		//终止所有子进程.
+		PROCESSENTRY32 pe = { sizeof (PROCESSENTRY32 )};
+		HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+		BOOL bFind = Process32First(hSnap, &pe);
+		while (bFind) {
+			if (pe.th32ParentProcessID == m_pi.dwProcessId){
+				//kill process.
+				DWORD pid = pe.th32ParentProcessID;
+				HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+				if (hProcess){
+					TerminateProcess(hProcess, 0);
+					CloseHandle(hProcess);
+				}
+			}
+			bFind = Process32Next(hSnap, &pe);
+		}
+
+		CloseHandle(hSnap);
+		//关闭cmd.
 		TerminateProcess(m_pi.hProcess, 0);
-		//
 		CloseHandle(m_pi.hProcess);
 		CloseHandle(m_pi.hThread);
 	}
 	//线程ReadFile会结束，等待线程退出。;
 	std::cout << __LINE__ << "线程ReadFile会结束，等待线程退出。;" << std::endl;
-	if(WAIT_TIMEOUT == WaitForSingleObject(m_hReadThread, 30000)){
+	if(WAIT_TIMEOUT == WaitForSingleObject(m_hReadThread, 6666)){
 		TerminateThread(m_hReadThread,0);
 		WaitForSingleObject(m_hReadThread, INFINITE);
 	}
 	CloseHandle(m_hReadThread);
+
 	//cmd 杀不掉;
 	//关闭管道.;
 	CloseHandle(m_hReadPipe);
@@ -114,7 +137,7 @@ void CCmd::OnCommand(char*szCmd)
 	DWORD dwLeft = lstrlenA(szCmd);
 	while(dwLeft>0){
 		dwWrite = 0;
-		if (FALSE == WriteFile(m_hWritePipe, szCmd,dwLeft, &dwWrite, NULL)){	
+		if (!WriteFile(m_hWritePipe, szCmd,dwLeft, &dwWrite, NULL)){	
 			Close();
 			break;
 		}
@@ -151,7 +174,8 @@ int CCmd::CmdBegin()
 	
 	//
 	TCHAR szCmd[] = TEXT("cmd.exe");
-	if (FALSE == CreateProcess(NULL, szCmd, NULL, NULL, TRUE, NORMAL_PRIORITY_CLASS, NULL, NULL, &si, &m_pi)){
+	if (!CreateProcess(NULL, szCmd, NULL, NULL, TRUE, 
+		NORMAL_PRIORITY_CLASS, NULL, NULL, &si, &m_pi)){
 		return -1;
 	}
 
@@ -160,7 +184,7 @@ int CCmd::CmdBegin()
 	CloseHandle(hCmdWritePipe);
 
 	m_hReadThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)ReadThread, this, NULL, NULL);
-	if (m_hReadThread == NULL)
+	if (!m_hReadThread)
 		return -1;
 	return 0;
 }

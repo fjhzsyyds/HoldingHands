@@ -26,18 +26,16 @@ void CFileManagerSrv::OnClose()
 			// pHandler先关闭的,那么就不管窗口了
 			m_pDlg->m_pHandler = nullptr;
 			m_pDlg->PostMessage(WM_FMDLG_ERROR,(WPARAM)TEXT("Disconnect."));
-			m_pDlg = nullptr;
 		}
+		m_pDlg = nullptr;
 	}
 }
 void CFileManagerSrv::OnOpen()
 {
 	m_pDlg = new CFileManagerDlg(this);
 
-	if (FALSE == m_pDlg->Create(IDD_FM_DLG, CWnd::GetDesktopWindow())){
-		Close();
-		return;
-	}
+	ASSERT(m_pDlg->Create(IDD_FM_DLG, CWnd::GetDesktopWindow()));
+
 	m_pDlg->ShowWindow(SW_SHOW);
 	//禁用窗口,请求目录
 	m_pDlg->GetDlgItem(IDC_EDIT1)->EnableWindow(FALSE);

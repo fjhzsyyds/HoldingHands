@@ -3,6 +3,7 @@
 #include "RemoteDesktopSrv.h"
 #include "MainFrm.h"
 #include "utils.h"
+#include "resource.h"
 
 #pragma comment(lib,"HHRDKbHook.lib")
 
@@ -26,7 +27,9 @@ CRemoteDesktopWnd::CRemoteDesktopWnd(CRemoteDesktopSrv*pHandler):
 	m_hNextViewer(NULL),
 	m_DisplayMode(0),
 	m_OldDisplayMode(0),
-	m_bFullScreenStretchMode(FALSE)
+	m_bFullScreenStretchMode(FALSE),
+	m_dwMaxpFps(30),
+	m_dwQuality(QUALITY_LOW)
 {
 	m_DisplayMode |= DISPLAY_TILE;
 	//
@@ -35,6 +38,9 @@ CRemoteDesktopWnd::CRemoteDesktopWnd(CRemoteDesktopSrv*pHandler):
 			GetModuleHandle(TEXT("HHRDKbHook.dll")), NULL);
 		dwWndCount++;
 	}
+
+	//
+	//m_IsBusy = FALSE;
 }
 
 
@@ -78,6 +84,9 @@ BEGIN_MESSAGE_MAP(CRemoteDesktopWnd, CFrameWnd)
 	ON_WM_DRAWCLIPBOARD()
 	ON_COMMAND(ID_DISPLAY_FULLSCREEN, &CRemoteDesktopWnd::OnDisplayFullscreen)
 	ON_COMMAND(ID_OTHER_SCREENSHOT, &CRemoteDesktopWnd::OnOtherScreenshot)
+	ON_COMMAND(ID_QUALITY_LOW, &CRemoteDesktopWnd::OnQualityLow)
+	ON_COMMAND(ID_QUALITY_HIGH, &CRemoteDesktopWnd::OnQualityHigh)
+	ON_MESSAGE(WM_REMOTE_DESKTOP_SCREENSHOT, OnScreenShot)
 END_MESSAGE_MAP()
 
 
@@ -92,6 +101,8 @@ void CRemoteDesktopWnd::PostNcDestroy()
 
 void CRemoteDesktopWnd::OnClose()
 {
+	//KillTimer(0x10086);
+
 	if (m_hNextViewer){
 		ChangeClipboardChain(m_hNextViewer);
 		m_hNextViewer = NULL;
@@ -134,10 +145,15 @@ int CRemoteDesktopWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	SetBkMode(m_hDC,TRANSPARENT);
 	SetTextColor(m_hDC,0x000033ff);
 
-	pMenu->GetSubMenu(2)->CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_20, MF_BYCOMMAND);
+	pMenu->GetSubMenu(2)->CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_30, MF_BYCOMMAND);
+	pMenu->GetSubMenu(3)->CheckMenuRadioItem(ID_QUALITY_LOW, ID_QUALITY_HIGH, ID_QUALITY_LOW, MF_BYCOMMAND);
 	//
 	//监听剪切板数据
 	m_hNextViewer = SetClipboardViewer();
+
+	//开始获取数据.
+	if (m_pHandler)
+		m_pHandler->StartRDP(m_dwMaxpFps, m_dwQuality);
 	return 0;
 }
 
@@ -259,6 +275,9 @@ LRESULT CRemoteDesktopWnd::OnDesktopSize(WPARAM wParam, LPARAM lParam)
 	//
 	m_dwMaxHeight = m_dwDeskHeight + ClientRect.top - WndRect.top + WndRect.bottom - ClientRect.bottom;
 	m_dwMaxWidth = m_dwDeskWidth + ClientRect.left - WndRect.left + WndRect.right - ClientRect.right;
+	
+	//
+	//SetTimer(0x10086, 15 ,NULL);
 	return 0;
 }
 LRESULT CRemoteDesktopWnd::OnDraw(WPARAM wParam, LPARAM lParam)
@@ -288,6 +307,7 @@ LRESULT CRemoteDesktopWnd::OnDraw(WPARAM wParam, LPARAM lParam)
 	}
 
 	m_dwFps++;
+
 	//update fps
 	if ((GetTickCount() - m_dwLastTime) >= 1000){
 		CString text;
@@ -298,83 +318,10 @@ LRESULT CRemoteDesktopWnd::OnDraw(WPARAM wParam, LPARAM lParam)
 		m_dwLastTime = GetTickCount();
 		m_dwFps = 0;
 	}
+	//m_IsBusy = FALSE;
 	return 0;
 }
 
-BOOL CRemoteDesktopWnd::OnWndMsg(UINT message, WPARAM wParam, LPARAM lParam, LRESULT* pResult)
-{
-	if ((m_DisplayMode &DISPLAY_FULLSCREEN) &&  (message == WM_KEYDOWN)
-		&& (wParam == VK_ESCAPE)){
-		//退出全屏.
-		m_DisplayMode = m_OldDisplayMode;
-		SetWindowPlacement(&m_old);
-	}
-	// TODO:  在此添加专用代码和/或调用基类
-	if ((!(m_ControlFlags&CONTROL_MOUSE)) && (!(m_ControlFlags&CONTROL_KEYBOARD)))
-		return CFrameWnd::OnWndMsg(message, wParam, lParam, pResult);
-	
-	CRemoteDesktopSrv::CtrlParam Param = { 0 };
-
-	if (message >= WM_MOUSEMOVE && message <= WM_MOUSEWHEEL && (m_ControlFlags&CONTROL_MOUSE))
-	{
-		DWORD dwX, dwY;
-		dwX = LOWORD(lParam);
-		dwY = HIWORD(lParam);
-
-		if (m_DisplayMode & DISPLAY_STRETCH)
-		{
-			RECT rect;
-			GetClientRect(&rect);
-			dwX = (DWORD)(dwX * 65535.0 / rect.right);
-			dwY = (DWORD)(dwY * 65535.0 / rect.bottom);
-		}
-		else if (m_DisplayMode & DISPLAY_TILE)
-		{
-			dwX += (DWORD)(m_OrgPt.x * SCROLL_UINT);
-			dwY += (DWORD)(m_OrgPt.y * SCROLL_UINT);
-			dwX = (DWORD)(dwX * 65535.0 / m_dwDeskWidth);
-			dwY = (DWORD)(dwY * 65535.0 / m_dwDeskHeight);
-		}
-		else if (m_DisplayMode & DISPLAY_FULLSCREEN){
-			//
-			if (m_bFullScreenStretchMode){
-				RECT rect;
-				GetClientRect(&rect);
-				dwX = (DWORD)(dwX * 65535.0 / rect.right);
-				dwY = (DWORD)(dwY * 65535.0 / rect.bottom);
-			}
-			else {
-				//
-				if (dwX < m_FullScreenDrawOrg.x || dwX >(m_FullScreenDrawOrg.x + m_dwDeskWidth) ||
-					dwY < m_FullScreenDrawOrg.y || dwY >(m_FullScreenDrawOrg.y + m_dwDeskHeight)){
-					return CFrameWnd::OnWndMsg(message, wParam, lParam, pResult);			//ignore this message
-				}
-				//
-				dwX = (DWORD)((dwX - m_FullScreenDrawOrg.x) * 65535.0 / m_dwDeskWidth);
-				dwY = (DWORD)((dwY - m_FullScreenDrawOrg.y) * 65535.0 / m_dwDeskHeight);
-			}
-		}
-		
-		Param.dwType = message;
-		Param.Param.dwCoor = MAKEWPARAM(dwX,dwY);		//坐标.
-
-		if (message == WM_MOUSEWHEEL)
-			Param.dwExtraData = (SHORT)(HIWORD(wParam));
-		if (m_pHandler)
-			m_pHandler->Control(&Param);
-		return TRUE;
-	}
-
-	if ((message == WM_KEYDOWN || message == WM_KEYUP) && (m_ControlFlags&CONTROL_KEYBOARD))
-	{
-		Param.dwType = message;				//消息类型
-		Param.Param.VkCode = wParam;		//vkCode
-		if (m_pHandler)
-			m_pHandler->Control(&Param);		//
-		return TRUE;
-	}
-	return CFrameWnd::OnWndMsg(message, wParam, lParam, pResult);
-}
 
 void CRemoteDesktopWnd::OnSize(UINT nType, int cx, int cy)
 {
@@ -539,37 +486,46 @@ void CRemoteDesktopWnd::OnSetFocus(CWnd* pOldWnd)
 
 void CRemoteDesktopWnd::OnMaxfps10()
 {
-	if (m_pHandler)
-		m_pHandler->SetMaxFps(10);
+	m_dwMaxpFps = 10;
 	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
 		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_10, MF_BYCOMMAND);
+
+	if (m_pHandler)
+		m_pHandler->StartRDP(m_dwMaxpFps, m_dwQuality);
 }
 
 
 void CRemoteDesktopWnd::OnMaxfps20()
 {
-	if (m_pHandler)
-		m_pHandler->SetMaxFps(20);
+	m_dwMaxpFps = 20;
 	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
 		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_20, MF_BYCOMMAND);
+
+	if (m_pHandler)
+		m_pHandler->StartRDP(m_dwMaxpFps, m_dwQuality);
 }
 
 
 void CRemoteDesktopWnd::OnMaxfps30()
 {
-	if (m_pHandler)
-		m_pHandler->SetMaxFps(30);
+	m_dwMaxpFps = 30;
 	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
 		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_30, MF_BYCOMMAND);
+
+	if (m_pHandler)
+		m_pHandler->StartRDP(m_dwMaxpFps, m_dwQuality);
+
 }
 
 
 void CRemoteDesktopWnd::OnMaxfpsNolimit()
 {
-	if (m_pHandler)
-		m_pHandler->SetMaxFps(-1); 
+	m_dwMaxpFps = 60;
 	GetMenu()->GetSubMenu(0)->GetSubMenu(2)->
 		CheckMenuRadioItem(ID_MAXFPS_10, ID_MAXFPS_NOLIMIT, ID_MAXFPS_NOLIMIT, MF_BYCOMMAND);
+
+	if (m_pHandler)
+		m_pHandler->StartRDP(m_dwMaxpFps, m_dwQuality);
 }
 
 
@@ -693,18 +649,12 @@ void CRemoteDesktopWnd::OnDisplayFullscreen()
 }
 
 
-
-void CRemoteDesktopWnd::OnOtherScreenshot(){
-	DWORD dwBmpSize;
-	LPVOID Buffer = NULL;
-
-	if (m_dwDeskHeight == 0 || m_dwDeskWidth == 0 || m_pHandler == NULL)
-		return ;
-	
-	Buffer = m_pHandler->GetBmpFile(&dwBmpSize);
+LRESULT CRemoteDesktopWnd::OnScreenShot(WPARAM wParam,LPARAM lParam){
+	char * Buffer = (char*)wParam;
+	DWORD dwSize = lParam;
 
 	if (Buffer == NULL){
-		return;
+		return 0;
 	}
 
 	CString FileName;
@@ -726,7 +676,7 @@ void CRemoteDesktopWnd::OnOtherScreenshot(){
 	}
 
 	MakesureDirExist(SavePath, TRUE);
-	HANDLE hFile = CreateFile(SavePath, GENERIC_WRITE, NULL, 
+	HANDLE hFile = CreateFile(SavePath, GENERIC_WRITE, NULL,
 		NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	CString err;
 
@@ -736,12 +686,138 @@ void CRemoteDesktopWnd::OnOtherScreenshot(){
 
 	if (hFile != INVALID_HANDLE_VALUE){
 		DWORD dwWrite = 0;
-		WriteFile(hFile, Buffer, dwBmpSize, &dwWrite, NULL);
+		WriteFile(hFile, Buffer, dwSize, &dwWrite, NULL);
 		CloseHandle(hFile);
 
 		err.Format(TEXT("Image has been save to %s"), SavePath);
 	}
-	delete[] Buffer;
-	MessageBox(err,TEXT("Tips"),MB_OK|MB_ICONINFORMATION);
+	MessageBox(err, TEXT("Tips"), MB_OK | MB_ICONINFORMATION);
+	return 0;
 }
 
+void CRemoteDesktopWnd::OnOtherScreenshot(){
+	if (m_pHandler)
+		m_pHandler->ScreenShot();
+}
+
+
+
+BOOL CRemoteDesktopWnd::PreTranslateMessage(MSG* pMsg)
+{
+	UINT message = pMsg->message;
+	WPARAM wParam = pMsg->wParam;
+	LPARAM lParam = pMsg->lParam;
+
+	// TODO:  在此添加专用代码和/或调用基类
+	if ((message == WM_KEYDOWN) && (wParam == VK_ESCAPE) &&
+		(m_DisplayMode &DISPLAY_FULLSCREEN)
+		){
+		//退出全屏.
+		m_DisplayMode = m_OldDisplayMode;
+		SetWindowPlacement(&m_old);
+		return TRUE;
+	}
+
+	// TODO:  在此添加专用代码和/或调用基类
+	if ((!(m_ControlFlags&CONTROL_MOUSE)) &&
+		(!(m_ControlFlags&CONTROL_KEYBOARD)))
+		return FALSE;
+
+	CRemoteDesktopSrv::CtrlParam Param = { 0 };
+
+	if ((m_ControlFlags&CONTROL_MOUSE) && 
+		message >= WM_MOUSEMOVE && message <= WM_MOUSEWHEEL)
+	{
+		DWORD dwX, dwY;
+		dwX = LOWORD(lParam);
+		dwY = HIWORD(lParam);
+
+		if (m_DisplayMode & DISPLAY_STRETCH)
+		{
+			RECT rect;
+			GetClientRect(&rect);
+			dwX = (DWORD)(dwX * 65535.0 / rect.right);
+			dwY = (DWORD)(dwY * 65535.0 / rect.bottom);
+		}
+		else if (m_DisplayMode & DISPLAY_TILE)
+		{
+			dwX += (DWORD)(m_OrgPt.x * SCROLL_UINT);
+			dwY += (DWORD)(m_OrgPt.y * SCROLL_UINT);
+			dwX = (DWORD)(dwX * 65535.0 / m_dwDeskWidth);
+			dwY = (DWORD)(dwY * 65535.0 / m_dwDeskHeight);
+		}
+		else if (m_DisplayMode & DISPLAY_FULLSCREEN){
+			//
+			if (m_bFullScreenStretchMode){
+				RECT rect;
+				GetClientRect(&rect);
+				dwX = (DWORD)(dwX * 65535.0 / rect.right);
+				dwY = (DWORD)(dwY * 65535.0 / rect.bottom);
+			}
+			else {
+				//
+				if (dwX < m_FullScreenDrawOrg.x || dwX >(m_FullScreenDrawOrg.x + m_dwDeskWidth) ||
+					dwY < m_FullScreenDrawOrg.y || dwY >(m_FullScreenDrawOrg.y + m_dwDeskHeight)){
+					return FALSE;
+				}
+				//
+				dwX = (DWORD)((dwX - m_FullScreenDrawOrg.x) * 65535.0 / m_dwDeskWidth);
+				dwY = (DWORD)((dwY - m_FullScreenDrawOrg.y) * 65535.0 / m_dwDeskHeight);
+			}
+		}
+
+		Param.dwType = message;
+		Param.Param.dwCoor = MAKEWPARAM(dwX, dwY);		//坐标.
+
+		if (message == WM_MOUSEWHEEL)
+			Param.dwExtraData = (SHORT)(HIWORD(wParam));
+		if (m_pHandler)
+			m_pHandler->Control(&Param);
+		return TRUE;
+	}
+
+	if ((m_ControlFlags&CONTROL_KEYBOARD) && 
+		(message == WM_KEYDOWN || message == WM_KEYUP))
+	{
+		Param.dwType = message;				//消息类型
+		Param.Param.VkCode = wParam;		//vkCode
+		if (m_pHandler)
+			m_pHandler->Control(&Param);		//
+		return TRUE;
+	}
+	return CFrameWnd::PreTranslateMessage(pMsg);
+}
+
+
+//void CRemoteDesktopWnd::OnTimer(UINT_PTR nIDEvent)
+//{
+//	// TODO:  在此添加消息处理程序代码和/或调用默认值
+//	if (m_pHandler && !m_IsBusy){
+//		m_pHandler->NextFrame();
+//		m_IsBusy = TRUE;
+//	}
+//	CFrameWnd::OnTimer(nIDEvent);
+//}
+
+
+void CRemoteDesktopWnd::OnQualityLow()
+{
+	// TODO:  在此添加命令处理程序代码
+	m_dwQuality = QUALITY_LOW;
+	GetMenu()->GetSubMenu(0)->GetSubMenu(3)->
+		CheckMenuRadioItem(ID_QUALITY_LOW, ID_QUALITY_HIGH, ID_QUALITY_LOW, MF_BYCOMMAND);
+	if (m_pHandler)
+		m_pHandler->StartRDP(m_dwMaxpFps, m_dwQuality);
+}
+
+
+void CRemoteDesktopWnd::OnQualityHigh()
+{
+	// TODO:  在此添加命令处理程序代码
+	m_dwQuality = QUALITY_HIGH;
+	GetMenu()->GetSubMenu(0)->GetSubMenu(3)->
+		CheckMenuRadioItem(ID_QUALITY_LOW, ID_QUALITY_HIGH, ID_QUALITY_HIGH, MF_BYCOMMAND);
+
+	if (m_pHandler)
+		m_pHandler->StartRDP(m_dwMaxpFps, m_dwQuality);
+}

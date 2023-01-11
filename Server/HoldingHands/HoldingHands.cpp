@@ -7,6 +7,8 @@
 #include "afxdialogex.h"
 #include "HoldingHands.h"
 #include "MainFrm.h"
+#include "IOCPServer.h"
+
 extern "C"
 {
 #include <libavcodec\avcodec.h>
@@ -82,7 +84,7 @@ BOOL CHoldingHandsApp::InitInstance()
 	EnableTaskbarInteraction(FALSE);
 
 	// 使用 RichEdit 控件需要  AfxInitRichEdit2()	
-	// AfxInitRichEdit2();
+	AfxInitRichEdit2();
 
 	// 标准初始化
 	// 如果未使用这些功能并希望减小
@@ -95,14 +97,16 @@ BOOL CHoldingHandsApp::InitInstance()
 
 	avcodec_register_all();
 	
+	if (!CIOCPServer::SocketInit()){
+		AfxMessageBox(TEXT("CIOCPServer::SocketInit Failed"));
+		return FALSE;
+	}
+
 #ifdef _DEBUG
 	AllocConsole();
+	SetConsoleTitleW(TEXT("HoldingHands Debug Log"));
 #endif
 
-	//SetConsoleTitle(TEXT("Holding Hands Debug Log"));
-	//DWORD dwWriteBytes = 0;
-	//WriteFile(GetStdHandle(STD_OUTPUT_HANDLE), "Hello", 5, & dwWriteBytes, 0);;
-	//
 	// 若要创建主窗口，此代码将创建新的框架窗口
 	// 对象，然后将其设置为应用程序的主窗口对象
 	CMainFrame* pFrame = new CMainFrame;
@@ -127,6 +131,8 @@ int CHoldingHandsApp::ExitInstance()
 	//TODO:  处理可能已添加的附加资源
 	AfxOleTerm(FALSE);
 	
+	CIOCPServer::SocketTerm();
+
 	if (m_pShellManager){
 		delete m_pShellManager;
 		m_pShellManager = NULL;

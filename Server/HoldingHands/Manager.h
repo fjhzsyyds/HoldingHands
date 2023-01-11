@@ -31,8 +31,7 @@ class CManager
 private:
 	friend class CIOCPServer;
 
-	CIOCPServer* m_pServer;
-
+	HWND	m_hNotifyWnd;
 
 	CRITICAL_SECTION m_cs;
 
@@ -64,7 +63,7 @@ public:
 	BOOL SendMsg(CMsgHandler*pHandler, WORD Msg, char*data, size_t len);
 	void Close(CMsgHandler*pHandler);
 
-	CManager(CIOCPServer*pServer);
+	CManager(HWND hNotifyWnd);
 	~CManager();
 };
 

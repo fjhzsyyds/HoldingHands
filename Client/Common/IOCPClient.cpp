@@ -2,6 +2,7 @@
 #include "Packet.h"
 #include "..\Common\Manager.h"
 #include <PROCESS.H>
+#include "utils.h"
 
 #pragma comment(lib,"ws2_32.lib")
 
@@ -214,6 +215,9 @@ unsigned int __stdcall CIOCPClient::WorkThread(void*Param)
 				pClient->OnReadComplete(dwTransferBytes, bEOF);
 				//断开连接了.(只根据IO_READ判断.)
 				if (bEOF){
+					dbg_log("Disconnect \nbResult : %d\ndwTransferBytes:%d\nm_bManualPost:%d",
+						bResult, dwTransferBytes, pOverlapped->m_bManualPost);
+
 					pClient->Disconnect();
 					pClient->OnClose();
 					break;
@@ -419,6 +423,7 @@ void CIOCPClient::PostRead()
 	//IO错误,该SOCKET被关闭了,或者buff为NULL;
 	if (nIORet == SOCKET_ERROR	&& nErrorCode != WSA_IO_PENDING){
 		//将这个标记为手动投递的
+		dbg_log("CIOCPClient::PostRead WSARecv Failed with %d", nErrorCode);
 		pOverlapped->m_bManualPost = TRUE;
 		PostQueuedCompletionStatus(m_hCompletionPort, 0, 0, (LPOVERLAPPED)pOverlapped);
 	}
@@ -438,6 +443,7 @@ void CIOCPClient::PostWrite()
 	nErrorCode = WSAGetLastError();
 	//IO错误,该SOCKET被关闭了,或者buff为NULL;
 	if (nIORet == SOCKET_ERROR	&& nErrorCode != WSA_IO_PENDING){
+		dbg_log("CIOCPClient::PostWrite WSASend Failed with %d", nErrorCode);
 		pOverlapped->m_bManualPost = TRUE;
 		PostQueuedCompletionStatus(m_hCompletionPort, 0, 0, (LPOVERLAPPED)pOverlapped);
 	}

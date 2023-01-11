@@ -132,9 +132,6 @@
     <ClInclude Include="Config.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="utils.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="MsgHandler.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -148,6 +145,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="CmdEdit.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Client\Common\utils.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
@@ -263,9 +263,6 @@
     <ClCompile Include="Config.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="utils.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="MsgHandler.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -279,6 +276,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="CmdEdit.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Client\Common\utils.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

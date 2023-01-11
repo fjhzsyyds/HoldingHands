@@ -22,10 +22,8 @@ CAudioSrv::~CAudioSrv()
 void CAudioSrv::OnOpen()
 {
 	m_pDlg = new CAudioDlg(this);
-	if (!m_pDlg->Create(IDD_AUDIODLG,CWnd::GetDesktopWindow())){
-		Close();
-		return;
-	}
+	ASSERT(m_pDlg->Create(IDD_AUDIODLG, CWnd::GetDesktopWindow()));
+
 	m_pDlg->ShowWindow(SW_SHOW);
 	//开始
 	SendMsg(AUDIO_BEGIN, 0, 0);
@@ -46,8 +44,8 @@ void CAudioSrv::OnClose()
 			// pHandler先关闭的,那么就不管窗口了
 			m_pDlg->m_pHandler = nullptr;
 			m_pDlg->PostMessage(WM_AUDIO_ERROR, (WPARAM)TEXT("Disconnect."));
-			m_pDlg = nullptr;
 		}
+		m_pDlg = nullptr;
 	}
 }
 
@@ -66,7 +64,6 @@ void CAudioSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 	case AUDIO_PLAY_STOP:
 		OnAudioPlayStop();
 		break;
-	
 	case AUDIO_ERROR:
 		OnAudioError((TCHAR*)Buffer);
 		break;

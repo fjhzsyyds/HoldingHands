@@ -39,18 +39,15 @@ void CCameraSrv::OnClose()
 			// pHandler先关闭的,那么就不管窗口了
 			m_pDlg->m_pHandler = nullptr;
 			m_pDlg->PostMessage(WM_CAMERA_ERROR, (WPARAM)TEXT("Disconnect."));
-			m_pDlg = nullptr;
 		}
+		m_pDlg = nullptr;
 	}
 }
 
 void CCameraSrv::OnOpen()
 {
 	m_pDlg = new CCameraDlg(this);
-	if (FALSE == m_pDlg->Create(IDD_CAM_DLG,CWnd::GetDesktopWindow())){
-		Close();
-		return;
-	}
+	ASSERT(m_pDlg->Create(IDD_CAM_DLG, CWnd::GetDesktopWindow()));
 
 	m_pDlg->ShowWindow(SW_SHOW);
 }

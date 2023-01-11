@@ -24,11 +24,8 @@ void CChatSrv::OnOpen()
 		lstrcpy(m_szNickName,dlg.m_NickName);
 	}
 	m_pDlg = new CChatDlg(this);
-	if (!m_pDlg->Create(IDD_CHAT_DLG,CWnd::GetDesktopWindow()))
-	{
-		Close();
-		return;
-	}
+	ASSERT(m_pDlg->Create(IDD_CHAT_DLG, CWnd::GetDesktopWindow()));
+
 	//禁用SendMsg button.
 	m_pDlg->GetDlgItem(IDOK)->EnableWindow(FALSE);
 	m_pDlg->ShowWindow(SW_SHOW);
@@ -47,8 +44,8 @@ void CChatSrv::OnClose()
 			// pHandler先关闭的,那么就不管窗口了
 			m_pDlg->m_pHandler = nullptr;
 			m_pDlg->PostMessage(WM_CHATDLG_ERROR, (WPARAM)TEXT("Disconnect."));
-			m_pDlg = nullptr;
 		}
+		m_pDlg = nullptr;
 	}
 }
 

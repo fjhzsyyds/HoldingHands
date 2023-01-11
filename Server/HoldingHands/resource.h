@@ -70,6 +70,7 @@
 #define IDC_COMBO4                      1020
 #define IDC_URL                         1022
 #define IDC_FILE_NAME                   1023
+#define IDC_RICHEDIT21                  1023
 #define IDC_PROGRESS                    1024
 #define ID_MAIN                         32771
 #define ID_MAIN_STARTSERVER             32772
@@ -149,14 +150,17 @@
 #define ID_UTILS_COPYTOSTARTUP          32847
 #define ID_UTILS_ADDTO                  32848
 #define ID_UTILS_DOWNLOADANDEXEC        32849
+#define ID_DISPLAY_QUALITY              32850
+#define ID_QUALITY_LOW                  32851
+#define ID_QUALITY_HIGH                 32852
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        348
-#define _APS_NEXT_COMMAND_VALUE         32850
-#define _APS_NEXT_CONTROL_VALUE         1023
+#define _APS_NEXT_COMMAND_VALUE         32853
+#define _APS_NEXT_CONTROL_VALUE         1024
 #define _APS_NEXT_SYMED_VALUE           310
 #endif
 #endif

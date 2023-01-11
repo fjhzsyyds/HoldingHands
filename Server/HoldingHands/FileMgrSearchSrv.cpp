@@ -33,11 +33,8 @@ void CFileMgrSearchSrv::OnOpen()
 {
 	m_pDlg = new CFileMgrSearchDlg(this);
 
-	if (!m_pDlg->Create(IDD_FM_SEARCH_DLG,CWnd::GetDesktopWindow()))
-	{
-		Close();
-		return;
-	}
+	ASSERT(m_pDlg->Create(IDD_FM_SEARCH_DLG, CWnd::GetDesktopWindow()));
+
 	m_pDlg->ShowWindow(SW_SHOW);
 }
 //有数据到达的时候调用这两个函数.

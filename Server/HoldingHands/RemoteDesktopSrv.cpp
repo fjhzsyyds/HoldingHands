@@ -6,6 +6,8 @@
 #pragma comment(lib,"avutil.lib")
 #pragma comment(lib,"yuv.lib")
 
+//#pragma comment(lib,"avformat.lib")
+
 CRemoteDesktopSrv::CRemoteDesktopSrv(CManager*pManager):
 	CMsgHandler(pManager),
 	m_pCodec(NULL),
@@ -75,11 +77,11 @@ void CRemoteDesktopSrv::RemoteDesktopSrvTerm()
 		memset(&m_Bmp, 0, sizeof(m_Bmp));
 		m_hBmp = NULL;
 	}
+
 	if (m_pCodecContext){
 		avcodec_free_context(&m_pCodecContext);
 		m_pCodecContext = 0;
 	}
-
 	m_pCodec = 0;
 	//AVFrame需要清除
 	av_frame_unref(&m_AVFrame);
@@ -95,17 +97,56 @@ void CRemoteDesktopSrv::NextFrame()
 	SendMsg(REMOTEDESKTOP_NEXT_FRAME,NULL, 0);
 }
 
-void CRemoteDesktopSrv::SetMaxFps(DWORD dwMaxFps)
-{
-	SendMsg(REMOTEDESKTOP_SETMAXFPS, (char*)&dwMaxFps, sizeof(DWORD));
+void CRemoteDesktopSrv::ScreenShot(){
+	SendMsg(REMOTEDESKTOP_GET_BMP_FILE, 0, 0);
 }
+
+
+void CRemoteDesktopSrv::OnOpen()
+{
+	m_pWnd = new CRemoteDesktopWnd(this);
+	ASSERT(m_pWnd->Create(NULL, NULL));
+
+	m_pWnd->ShowWindow(SW_SHOW);
+}
+
+
+void CRemoteDesktopSrv::OnClose()
+{
+	//
+	RemoteDesktopSrvTerm();
+	if (m_pWnd){
+		if (m_pWnd->m_DestroyAfterDisconnect){
+			//窗口先关闭的.
+			m_pWnd->DestroyWindow();
+			delete m_pWnd;
+		}
+		else{
+			// pHandler先关闭的,那么就不管窗口了
+			m_pWnd->m_pHandler = nullptr;
+			m_pWnd->PostMessage(WM_REMOTE_DESKTOP_ERROR, (WPARAM)TEXT("Disconnect."));
+		}
+		m_pWnd = nullptr;
+	}
+}
+
+void CRemoteDesktopSrv::OnBmpFile(char * Buffer, DWORD dwSize){
+
+	m_pWnd->SendMessage(WM_REMOTE_DESKTOP_SCREENSHOT, (WPARAM)Buffer, dwSize);
+}
+
+
 void CRemoteDesktopSrv::OnDeskSize(char*DeskSize)
 {
 	DWORD dwWidth = ((DWORD*)(DeskSize))[0];
 	DWORD dwHeight = ((DWORD*)(DeskSize))[1];
 
-	if (RemoteDesktopSrvInit(dwWidth, dwHeight) == FALSE){
-		m_pWnd->SendMessage(WM_REMOTE_DESKTOP_ERROR, (WPARAM)L"RemoteDesktopSrvInit Error", 0);
+	/*************************************************************/
+	RemoteDesktopSrvTerm();
+
+	if (!RemoteDesktopSrvInit(dwWidth, dwHeight)){
+		m_pWnd->SendMessage(WM_REMOTE_DESKTOP_ERROR, 
+			(WPARAM)L"RemoteDesktopSrvInit Error", 0);
 		Close();
 		return;
 	}
@@ -120,12 +161,10 @@ void CRemoteDesktopSrv::OnError(TCHAR*szError)
 	m_pWnd->SendMessage(WM_REMOTE_DESKTOP_ERROR, (WPARAM)szError, 0);
 }
 
+
 void CRemoteDesktopSrv::OnFrame(DWORD dwRead, char*Buffer)
 {
-	if (m_pCodecContext == NULL)
-	{
-		m_pWnd->SendMessage(WM_REMOTE_DESKTOP_ERROR, (WPARAM)L"RemoteDesktopSrv Not Init", 0);
-		Close();
+	if (m_pCodecContext == NULL){
 		return;
 	}
 	//解码数据.
@@ -133,7 +172,8 @@ void CRemoteDesktopSrv::OnFrame(DWORD dwRead, char*Buffer)
 	//
 	m_AVPacket.data = (uint8_t*)Buffer;
 	m_AVPacket.size = dwRead;
-	//获取下一帧
+
+	////获取下一帧
 	NextFrame();
 
 	if (!avcodec_send_packet(m_pCodecContext, &m_AVPacket)){
@@ -146,6 +186,7 @@ void CRemoteDesktopSrv::OnFrame(DWORD dwRead, char*Buffer)
 				m_AVFrame.data[1], m_AVFrame.linesize[1],
 				m_AVFrame.data[2], m_AVFrame.linesize[2],
 				(uint8_t*)m_Buffer, m_Bmp.bmWidthBytes,m_Bmp.bmWidth, m_Bmp.bmHeight);
+			
 			//显示到窗口上
 			m_pWnd->SendMessage(WM_REMOTE_DESKTOP_DRAW, (WPARAM)m_hMemDC, (LPARAM)&m_Bmp);
 			return;
@@ -157,54 +198,6 @@ void CRemoteDesktopSrv::OnFrame(DWORD dwRead, char*Buffer)
 	return;
 }
 
-char * CRemoteDesktopSrv::GetBmpFile(DWORD * lpDataSize){
-	DWORD dwBitsSize = 0, dwBufferSize = 0;
-	BITMAPINFOHEADER bi = { 0 };
-	BITMAPFILEHEADER bmfHeader = { 0 };
-	char * lpBuffer = NULL;
-	int Result = 0;
-
-	if (!m_Bmp.bmHeight || !m_Bmp.bmWidth){
-		return nullptr;
-	}
-
-	bi.biSize = sizeof(BITMAPINFOHEADER);
-	bi.biWidth = m_Bmp.bmWidth;
-	bi.biHeight = m_Bmp.bmHeight;
-	bi.biPlanes = 1;
-	bi.biBitCount = 24;
-	bi.biCompression = BI_RGB;
-
-	dwBitsSize = ((m_Bmp.bmWidth * bi.biBitCount + 31) / 32) * 4 * m_Bmp.bmHeight;
-
-	dwBufferSize += sizeof(BITMAPFILEHEADER);
-	dwBufferSize += sizeof(BITMAPINFOHEADER);
-	dwBufferSize += dwBitsSize;
-
-	lpBuffer = new char[dwBufferSize];
-
-	bmfHeader.bfType = 0x4D42;
-	bmfHeader.bfOffBits = (DWORD)sizeof(BITMAPFILEHEADER) + (DWORD)sizeof(BITMAPINFOHEADER);
-	bmfHeader.bfSize = dwBufferSize;
-
-	memcpy(lpBuffer, &bmfHeader, sizeof(bmfHeader));
-	memcpy(lpBuffer + sizeof(bmfHeader), &bi, sizeof(bi));
-
-	ResetEvent(m_hMutex);		//lock
-	//get bits 
-	Result = GetDIBits(m_hMemDC, m_hBmp, 0,
-		m_Bmp.bmHeight, lpBuffer +
-		sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER)
-		, (BITMAPINFO*)&bi, DIB_RGB_COLORS);
-	SetEvent(m_hMutex);			//unlock
-
-	if (Result != m_Bmp.bmHeight){
-		delete[] lpBuffer;
-		return NULL;
-	}
-	*lpDataSize = dwBufferSize;
-	return lpBuffer;
-}
 
 void CRemoteDesktopSrv::Control(CtrlParam*pParam)
 {
@@ -214,35 +207,6 @@ void CRemoteDesktopSrv::Control(CtrlParam*pParam)
 *	Event Handler
 *
 **************************************************************************/
-void CRemoteDesktopSrv::OnClose()
-{
-	RemoteDesktopSrvTerm();
-	if (m_pWnd){
-		if (m_pWnd->m_DestroyAfterDisconnect){
-			//窗口先关闭的.
-			m_pWnd->DestroyWindow();
-			delete m_pWnd;
-		}
-		else{
-			// pHandler先关闭的,那么就不管窗口了
-			m_pWnd->m_pHandler = nullptr;
-			m_pWnd->PostMessage(WM_REMOTE_DESKTOP_ERROR, (WPARAM)TEXT("Disconnect."));
-			m_pWnd = nullptr;
-		}
-	}
-}
-
-void CRemoteDesktopSrv::OnOpen()
-{
-	m_pWnd = new CRemoteDesktopWnd(this);
-	if (m_pWnd->Create(NULL, NULL) == FALSE){
-		Close();
-		return;
-	}
-	m_pWnd->ShowWindow(SW_SHOW);
-	//获取桌面大小.
-	SendMsg(REMOTEDESKTOP_GETSIZE, 0, 0);
-}
 
 void CRemoteDesktopSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 {
@@ -259,6 +223,9 @@ void CRemoteDesktopSrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)
 		break;
 	case REMOTEDESKTOP_SET_CLIPBOARDTEXT:
 		OnSetClipboardText(Buffer);
+		break;
+	case REMOTEDESKTOP_BMP_FILE:
+		OnBmpFile(Buffer, dwSize);
 		break;
 	default:
 		break;
@@ -282,4 +249,9 @@ void CRemoteDesktopSrv::OnSetClipboardText(char*Text){
 
 void CRemoteDesktopSrv::SetCaptureFlag(DWORD dwFlag){
 	SendMsg(REMOTEDESKTOP_SETFLAG, (char*)&dwFlag, sizeof(dwFlag));
+}
+
+void CRemoteDesktopSrv::StartRDP(DWORD dwMaxFps, DWORD dwQuality){
+	DWORD Args[2] = { dwMaxFps, dwQuality };
+	SendMsg(REMOTEDESKTOP_INIT_RDP, Args, sizeof(Args));
 }

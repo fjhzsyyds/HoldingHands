@@ -2,6 +2,7 @@
 #include "MiniDownloadSrv.h"
 #include "MiniDownloadDlg.h"
 #include "json\json.h"
+
 #include "utils.h"
 
 CMiniDownloadSrv::CMiniDownloadSrv(CManager*pManager) :
@@ -30,8 +31,8 @@ void CMiniDownloadSrv::OnClose()
 			m_pDlg->m_pHandler = nullptr;
 			if (!m_DownloadFinished)
 				m_pDlg->PostMessage(WM_MNDD_ERROR, (WPARAM)TEXT("Disconnect."));
-			m_pDlg = nullptr;
 		}
+		m_pDlg = nullptr;
 	}
 }
 void CMiniDownloadSrv::OnOpen()
@@ -40,10 +41,8 @@ void CMiniDownloadSrv::OnOpen()
 	SendMsg(MNDD_GET_FILE_INFO, 0, 0);
 	//
 	m_pDlg = new CMiniDownloadDlg(this);
-	if (!m_pDlg->Create(IDD_MNDD_DLG,CWnd::GetDesktopWindow())){
-		Close();
-		return;
-	}
+	ASSERT(m_pDlg->Create(IDD_MNDD_DLG, CWnd::GetDesktopWindow()));
+
 	m_pDlg->ShowWindow(SW_SHOW);
 }
 

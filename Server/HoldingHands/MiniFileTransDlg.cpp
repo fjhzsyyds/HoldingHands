@@ -35,7 +35,7 @@ void CMiniFileTransDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_TRANS_PROGRESS, m_Progress);
-	DDX_Control(pDX, IDC_EDIT1, m_TransLog);
+	DDX_Control(pDX, IDC_RICHEDIT21, m_TransLog);
 }
 
 
@@ -88,6 +88,8 @@ BOOL CMiniFileTransDlg::OnInitDialog()
 
 	m_Progress.SetRange(0, 100);
 	m_Progress.SetPos(0);
+
+	m_TransLog.LimitText(0x7fffffff);
 	return TRUE;  // return TRUE unless you set the focus to a control
 	// 异常:  OCX 属性页应返回 FALSE
 }
@@ -111,7 +113,6 @@ CString CMiniFileTransDlg::GetProgressString(ULONGLONG ullFinished, ULONGLONG ul
 	if (liTotalSize.QuadPart == 0){
 		liTotalSize.QuadPart = 1;
 	}
-
 	CString Text;
 	Text.Format(TEXT("%s / %s (%llu%%)"), szFinishedSize, szTotalSize,
 		100 * liFinishedSize.QuadPart / liTotalSize.QuadPart);
@@ -148,8 +149,10 @@ LRESULT CMiniFileTransDlg::OnTransFileBegin(WPARAM wParam, LPARAM lParam)
 {
 	CMiniFileTransSrv::FileInfo*pFile = (CMiniFileTransSrv::FileInfo*)wParam;
 	CString Text;
+	int length = m_TransLog.GetTextLength();
 	Text.Format(TEXT("Processing: %s"), pFile->RelativeFilePath);
-	m_TransLog.SetSel(-1);
+	m_TransLog.SetSel(length, length);
+
 	m_TransLog.ReplaceSel(Text);
 
 	//设置当前文件
@@ -170,16 +173,28 @@ LRESULT CMiniFileTransDlg::OnTransFileBegin(WPARAM wParam, LPARAM lParam)
 }
 
 //每一个文件传输结束后会调用这个.
+
+
+#define FILE_TRANS_MAX_LOG_SIZE		(50 * 1024)
+
 LRESULT CMiniFileTransDlg::OnTransFileFinished(WPARAM wParam, LPARAM lParam)
 {
-	m_TransLog.SetSel(-1);
+	int length = m_TransLog.GetTextLength();
 	CString Text = L"    -Successed\r\n";
 
 	if (wParam != MNFT_STATU_SUCCESS){
 		m_dwFailedCount++;
 		Text = L"    -Failed\r\n";
 	}
+
+	//if ((length + Text.GetLength()) > FILE_TRANS_MAX_LOG_SIZE){
+	//	//不知道为啥数据多了直接乱了 ??????
+	//	m_TransLog.SetWindowText(TEXT(""));
+	//	length = 0;
+	//}
+
 	//记录结果.
+	m_TransLog.SetSel(length, length);
 	m_TransLog.ReplaceSel(Text);
 	m_dwFinishedCount++;
 	return 0;

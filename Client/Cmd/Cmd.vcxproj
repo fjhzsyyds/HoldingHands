@@ -49,7 +49,7 @@
     <LinkIncremental>false</LinkIncremental>
     <IncludePath>..\Common;$(IncludePath)</IncludePath>
     <SourcePath>..\Common;$(SourcePath)</SourcePath>
-    <OutDir>..\..\..\server\modules</OutDir>
+    <OutDir>..\..\Server\modules</OutDir>
     <TargetName>cmd</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -88,6 +88,7 @@
     <ClCompile Include="..\Common\Manager.cpp" />
     <ClCompile Include="..\Common\MsgHandler.cpp" />
     <ClCompile Include="..\Common\Packet.cpp" />
+    <ClCompile Include="..\Common\utils.cpp" />
     <ClCompile Include="Cmd.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>

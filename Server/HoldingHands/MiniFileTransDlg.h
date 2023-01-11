@@ -61,8 +61,9 @@ public:
 	static CString GetProgressString(ULONGLONG ullFinished, ULONGLONG ullTotal);
 	virtual BOOL OnInitDialog();
 	CProgressCtrl m_Progress;
-	CEdit m_TransLog;
+
 	virtual void PostNcDestroy();
 	virtual void OnCancel();
 	virtual void OnOK();
+	CRichEditCtrl m_TransLog;
 };

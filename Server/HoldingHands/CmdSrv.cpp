@@ -25,17 +25,15 @@ void CCmdSrv::OnClose()
 			// pHandler先关闭的,那么就不管窗口了
 			m_pWnd->m_pHandler = nullptr;
 			m_pWnd->PostMessage(WM_CMD_ERROR, (WPARAM)TEXT("Disconnect."));
-			m_pWnd = nullptr;
 		}
+		m_pWnd = nullptr;
 	}
 }
 void CCmdSrv::OnOpen(){
 	m_pWnd = new CCmdWnd(this);
 
-	if (!m_pWnd->Create(NULL, L"Cmd", WS_OVERLAPPEDWINDOW)){
-		Close();
-		return;
-	}
+	ASSERT(m_pWnd->Create(NULL, L"Cmd", WS_OVERLAPPEDWINDOW));
+
 	RECT rect;
 	m_pWnd->GetWindowRect(&rect);
 	rect.right = rect.left + 860;

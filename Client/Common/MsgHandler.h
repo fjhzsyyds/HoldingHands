@@ -32,7 +32,7 @@ public:
 	virtual void OnWriteMsg(WORD Msg, DWORD dwSize, char*Buffer) = 0;
 
 public:
-	BOOL	SendMsg(WORD Msg,void* data, int len);
+	BOOL	SendMsg(WORD Msg, void* data, int len, BOOL Compress = TRUE);
 	void	Close();
 	//这些接口该不该给????
 

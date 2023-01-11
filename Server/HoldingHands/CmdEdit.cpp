@@ -111,10 +111,14 @@ void CCmdEdit::OnEnter(){
 	CStringA aCmd;
 	CString Cmd;
 
+	LARGE_INTEGER Frequency, Start, End;
+	QueryPerformanceFrequency(&Frequency);
+	QueryPerformanceCounter(&Start);
+
 	int Length = GetWindowTextLength();
 	if (m_ReadOnlyLength < Length){
 		SetSel(m_ReadOnlyLength, Length);
-		Copy();
+		Cut();
 		if (OpenClipboard()){
 			HGLOBAL hData = GetClipboardData(CF_UNICODETEXT);
 			if (hData){
@@ -125,6 +129,19 @@ void CCmdEdit::OnEnter(){
 			CloseClipboard();
 		}
 	}
+
+	/*
+		CString Text;
+		GetWindowText(Text);
+	
+		if (Text.GetLength() < m_ReadOnlyLength){
+			return;
+		}
+		Cmd = Text.GetBuffer() + m_ReadOnlyLength;
+	*/
+
+	QueryPerformanceCounter(&End);
+	double time = 1.0 * (End.QuadPart - Start.QuadPart) / Frequency.QuadPart;
 	if (Cmd == TEXT("cls") || Cmd == TEXT("clear")){
 		m_ReadOnlyLength = 0;
 		SetWindowText(TEXT(""));
@@ -157,12 +174,11 @@ void CCmdEdit::OnCmdResult(const CString &strResult){
 	while (*p){
 		if (p[0] == '\n' && p > start && p[-1] != '\r'){
 			strFinalResult += "\r\n";
-			p += 2;
 		}
 		else{
 			strFinalResult += *p;
-			p++;
 		}
+		p++;
 	}
 	//Sel 的时候是不算 \n的..只看做一个换行符.
 	ReplaceSel(strFinalResult);

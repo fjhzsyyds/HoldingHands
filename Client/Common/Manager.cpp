@@ -4,11 +4,8 @@
 #include "..\Common\zlib\zlib.h"
 #include "..\Common\MsgHandler.h"
 #include "..\Common\Manager.h"
+#include "utils.h"
 
-#include <iostream>
-
-
-#define ENABLE_COMPRESS		1
 #define MSG_COMPRESS		0x80000000
 
 #ifdef DEBUG
@@ -45,13 +42,13 @@ void CManager::Close(){
 	m_pClient->Disconnect();
 }
 
-BOOL CManager::SendMsg(WORD Msg, char*data, size_t len){
+BOOL CManager::SendMsg(WORD Msg, char*data, size_t len,BOOL Compress){
 	CIOCPClient *pClient = m_pClient;
 	Byte * source = (Byte*)data;
 	uLong source_len = len;
 	DWORD dwFlag = 0;
 
-	if (ENABLE_COMPRESS){
+	if (Compress){
 		uLong bufferSize = compressBound(source_len);
 		Byte * compreeBuffer = new Byte[bufferSize];
 
@@ -115,12 +112,12 @@ void CManager::DispatchMsg(CPacket*pPkt){
 
 void CManager::handler_init(){	
 	send(m_pClient->m_ClientSocket, (char*)&m_pMsgHandler->m_Identity, 4, 0);
-	std::cout << "CManager::handler_init()" << std::endl;
+	dbg_log("CManager::handler_init()");;
 	m_pMsgHandler->OnOpen();
 }
 
 void CManager::handler_term(){
-	std::cout << "CManager::handler_term()" << std::endl;
+	dbg_log("CManager::handler_term()");
 	m_pMsgHandler->OnClose();
 }
 
@@ -136,8 +133,6 @@ void CManager::ProcessCompletedPacket(int type, CPacket*pPkt){
 	}
 
 	if (PACKET_READ_COMPLETED == type){
-		std::cout << "Read Packet (type : " << pPkt->GetCommand() <<
-			" size : "<< pPkt->GetBodyLen() << std::endl;
 		DispatchMsg(pPkt);
 		return;
 	}

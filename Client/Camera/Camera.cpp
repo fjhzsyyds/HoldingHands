@@ -109,7 +109,7 @@ void CCamera::WorkThread(CCamera*pThis)
 		bStop = !pThis->m_Grab.GetFrame(&Buffer, &dwLen);
 
 		if (!bStop)
-			pThis->SendMsg(CAMERA_FRAME, Buffer, dwLen);	//编码后的,不用free
+			pThis->SendMsg(CAMERA_FRAME, Buffer, dwLen,FALSE);	//编码后的,不要压缩.
 
 		//采集速度好像就是30fps/s,这里不用限制了,
 		//网络延迟加队列缓存造成服务器不能实时显示画面,图像越大,由于带宽较小,延迟越高

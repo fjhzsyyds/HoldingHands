@@ -7,22 +7,32 @@
 
 #include <WinUser.h>
 
+#define THREAD_MSG_NEXT_FRAME	(WM_USER + 123)
+#define THREAD_MSG_GET_BMP_FILE	(WM_USER + 124)
+
+#define FRAME_QUEUE_SIZE		3
+
+
+
 CRemoteDesktop::CRemoteDesktop(CManager*pManager):
 CMsgHandler(pManager,REMOTEDESKTOP)
 {
-	m_dwLastTime = 0;
+	//m_dwLastTime = 0;
+	
 	m_dwFrameSize = 0;
 	m_FrameBuffer = 0;
-	m_dwMaxFps = 20;
+	
+	m_dwMaxFps = 30;
+	m_Quality = QUALITY_LOW;
+
 
 	m_hClipbdListenWnd = NULL;
 	m_ClipbdListenerThread = NULL;
 	
-
 	m_dwCaptureFlags &= 0;
 
-	/*m_hWorkThread = NULL;
-	m_bStopCapture = TRUE;*/
+	m_hWorkThread = NULL;
+	m_dwWorkThreadId = 0;
 }
 
 
@@ -30,31 +40,34 @@ CRemoteDesktop::~CRemoteDesktop()
 {
 }
 
+
+void CRemoteDesktop::OnOpen()
+{
+	//剪切板监视.
+	m_ClipbdListenerThread = CreateThread(0, 0,
+		(LPTHREAD_START_ROUTINE)ClipdListenProc, this, 0, 0);
+
+}
+
 void CRemoteDesktop::OnClose()
 {
-	/*InterlockedExchange((DWORD*)&m_bStopCapture, TRUE);*/
-	//关闭监听窗口
-	if(m_hClipbdListenWnd){
-		PostMessage(m_hClipbdListenWnd,WM_CLOSE,0,0);
+	//关闭监听剪切板.
+	if (m_hClipbdListenWnd){
+		PostMessage(m_hClipbdListenWnd, WM_CLOSE, 0, 0);
 		m_hClipbdListenWnd = NULL;
 	}
+
 	//等待线程退出
-	if(m_ClipbdListenerThread)
-	{
-		WaitForSingleObject(m_ClipbdListenerThread,INFINITE);
+	if (m_ClipbdListenerThread){
+		WaitForSingleObject(m_ClipbdListenerThread, INFINITE);
 		CloseHandle(m_ClipbdListenerThread);
 		m_ClipbdListenerThread = NULL;
 	}
-	////线程 Desktop Grab,虽然能提高fps,但是延迟太难受了
-	//if (m_hWorkThread){
-	//	WaitForSingleObject(m_hWorkThread, INFINITE);
-	//	CloseHandle(m_hWorkThread);
-	//	m_hWorkThread = NULL;
-	//}
+
+	TermRDP();
 }
-void CRemoteDesktop::OnOpen()
-{
-}
+
+
 
 
 #define WM_REMOTE_DESKTOP_SET_CLIPBOARD_TEXT	(WM_USER + 72)
@@ -203,20 +216,20 @@ void CRemoteDesktop::OnReadMsg(WORD Msg,DWORD dwSize ,char*Buffer)
 	case REMOTEDESKTOP_NEXT_FRAME:
 		OnNextFrame();
 		break;
-	case REMOTEDESKTOP_GETSIZE:
-		OnGetSize();
+	case REMOTEDESKTOP_INIT_RDP:
+		OnInitRDP(((DWORD*)Buffer)[0], ((DWORD*)Buffer)[1]);
 		break;
 	case REMOTEDESKTOP_CTRL:
 		OnControl((CtrlParam*)Buffer);
-		break;
-	case REMOTEDESKTOP_SETMAXFPS:
-		OnSetMaxFps(*(DWORD*)Buffer);
 		break;
 	case REMOTEDESKTOP_SET_CLIPBOARDTEXT:
 		OnSetClipbdText(Buffer);
 		break;
 	case REMOTEDESKTOP_SETFLAG:
 		OnSetFlag(*(DWORD*)Buffer);
+		break;
+	case REMOTEDESKTOP_GET_BMP_FILE:
+		OnScreenShot();
 		break;
 	default:
 		break;
@@ -226,7 +239,8 @@ void CRemoteDesktop::OnReadMsg(WORD Msg,DWORD dwSize ,char*Buffer)
 void CRemoteDesktop::OnSetClipbdText(char*szText)
 {
 	if(m_hClipbdListenWnd){
-		SendMessage(m_hClipbdListenWnd,WM_REMOTE_DESKTOP_SET_CLIPBOARD_TEXT,(WPARAM)szText,(LPARAM)0);
+		SendMessage(m_hClipbdListenWnd,WM_REMOTE_DESKTOP_SET_CLIPBOARD_TEXT,
+			(WPARAM)szText,(LPARAM)0);
 	}
 }
 void CRemoteDesktop::SetClipbdText(char*szText)
@@ -244,13 +258,32 @@ void CRemoteDesktop::OnSetFlag(DWORD dwFlag){
 	}
 }
 
-void CRemoteDesktop::OnGetSize()
+void CRemoteDesktop::TermRDP(){
+	////线程 Desktop Grab,虽然能提高fps,但是延迟太难受了
+	if (m_hWorkThread){
+		while (!PostThreadMessage(m_dwWorkThreadId, WM_QUIT, 0, 0)){
+			Sleep(1);
+		}
+		WaitForSingleObject(m_hWorkThread, INFINITE);
+		CloseHandle(m_hWorkThread);
+		m_hWorkThread = NULL;
+		m_dwWorkThreadId = 0;
+	}
+	//必须先等待线程退出.,因为有GetFrame...
+	m_grab.GrabTerm();
+}
+
+void CRemoteDesktop::OnInitRDP(DWORD dwFps, DWORD dwQuality)
 {
 	TCHAR szError[] = L"desktop grab init failed!";
 	DWORD buff[2];
-	
-	if (FALSE == m_grab.GrabInit()){
-		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (lstrlenW(szError) + 1)));
+	m_dwMaxFps = dwFps;
+	m_Quality = dwQuality;
+
+	TermRDP();
+
+	if (!m_grab.GrabInit(m_dwMaxFps,m_Quality)){
+		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (lstrlen(szError) + 1)));
 		Close();
 		return;
 	}
@@ -258,70 +291,72 @@ void CRemoteDesktop::OnGetSize()
 	m_grab.GetDesktopSize(buff, buff + 1);
 	SendMsg(REMOTEDESKTOP_DESKSIZE, (char*)buff, sizeof(DWORD) * 2);
 
-	//剪切板监听线程:
-	m_ClipbdListenerThread = CreateThread(0,0,(LPTHREAD_START_ROUTINE)ClipdListenProc,this,0,0);
+	m_hWorkThread = CreateThread(0, 0,
+		(LPTHREAD_START_ROUTINE)DesktopGrabThread, this,
+		0, &m_dwWorkThreadId);
 
-	//立刻开始编码
-	m_dwLastTime = GetTickCount();
-	if (!m_grab.GetFrame(&m_FrameBuffer, &m_dwFrameSize,m_dwCaptureFlags)){
-		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (lstrlen(szError) + 1)));
-		Close();
+	for (int i = 0; i < FRAME_QUEUE_SIZE; i++){
+		while (!PostThreadMessage(m_dwWorkThreadId, THREAD_MSG_NEXT_FRAME, 0, 0));
 	}
-
-	//m_bStopCapture = FALSE;
-	//m_hWorkThread = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)DesktopGrabThread, this, 0, 0);
 }
 
-/*
-	先不用这个,延迟太搞了,
 
-*/
-//void CALLBACK CRemoteDesktop::DesktopGrabThread(CRemoteDesktop*pThis){
-//	//成功,发送视频大小.
-//	TCHAR szError[] = L"desktop grab failed!";
-//	DWORD dwLastTime = GetTickCount();
-//
-//	while (true){
-//		BOOL bStop = InterlockedExchange((DWORD*)&pThis->m_bStopCapture, FALSE);
-//		if (bStop){
-//			break;
-//		}
-//
-//		if (!pThis->m_grab.GetFrame(&pThis->m_FrameBuffer, &pThis->m_dwFrameSize,
-//			pThis->m_dwCaptureFlags)){
-//
-//			pThis->Send(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (lstrlenW(szError) + 1)));
-//			pThis->Disconnect();
-//		}
-//		else{
-//			while (GetTickCount() - dwLastTime < (1000 / pThis->m_dwMaxFps)){
-//				Sleep(1);
-//			}
-//			dwLastTime = GetTickCount();
-//			//Send Frame
-//			pThis->Send(REMOTEDESKTOP_FRAME, pThis->m_FrameBuffer, pThis->m_dwFrameSize);
-//		}
-//	}
-//}
+void CALLBACK CRemoteDesktop::DesktopGrabThread(CRemoteDesktop*pThis){
+	//成功,发送视频大小.
+	TCHAR szError[] = L"desktop grab failed!";
+
+	MSG msg;
+	LARGE_INTEGER liFrequency,liLastSendTime;
+	double Elapse = 0.0, ElaspePerFrame = 0.0;
+
+	QueryPerformanceFrequency(&liFrequency);
+	QueryPerformanceCounter(&liLastSendTime);
+
+	while (GetMessage(&msg,0,0,0)){
+		if (msg.message == THREAD_MSG_GET_BMP_FILE){
+			char * buffer = 0;
+			DWORD dwSize = 0;
+
+			pThis->m_grab.GetBmpFile(&buffer, &dwSize);
+			pThis->SendMsg(REMOTEDESKTOP_BMP_FILE, buffer, dwSize);
+			delete[]buffer;
+		}
+		else if (msg.message == THREAD_MSG_NEXT_FRAME){
+			if (!pThis->m_grab.GetFrame(&pThis->m_FrameBuffer, &pThis->m_dwFrameSize,
+				pThis->m_dwCaptureFlags)){
+
+				pThis->SendMsg(REMOTEDESKTOP_ERROR, szError,
+					(sizeof(TCHAR) * (lstrlen(szError) + 1)));
+				pThis->Close();
+			}
+			else{
+				LARGE_INTEGER liCurTime;
+				do{
+					QueryPerformanceCounter(&liCurTime);
+					if (liCurTime.QuadPart < liLastSendTime.QuadPart){
+						break;
+					}
+					Elapse = 1.0 * (liCurTime.QuadPart - liLastSendTime.QuadPart) / liFrequency.QuadPart
+						* 1000.0;
+					ElaspePerFrame = 1000.0 / pThis->m_dwMaxFps;			//毫秒.
+
+				} while (Elapse < ElaspePerFrame + 1);
+
+				QueryPerformanceCounter(&liLastSendTime);
+				//Send Frame
+				pThis->SendMsg(REMOTEDESKTOP_FRAME, pThis->m_FrameBuffer, pThis->m_dwFrameSize,FALSE);//没必要压缩.
+			}
+		}
+	}
+}
+
 void CRemoteDesktop::OnNextFrame()
 {
-	TCHAR szError[] = L"desktop grab failed!";
-	DWORD dwUsedTime;
-	//发送上一帧.
-	SendMsg(REMOTEDESKTOP_FRAME, m_FrameBuffer, m_dwFrameSize);
-	//防止太快.
-	while (GetTickCount() - m_dwLastTime < (1000 / m_dwMaxFps))
-		Sleep(1);
-
-	m_dwLastTime = GetTickCount();
-	if (!m_grab.GetFrame(&m_FrameBuffer, &m_dwFrameSize,m_dwCaptureFlags)){
-		printf("get frame failed!\n");
-		SendMsg(REMOTEDESKTOP_ERROR, (char*)szError, (sizeof(TCHAR) * (lstrlen(szError) + 1)));
-		Close();
-	}
+	PostThreadMessage(m_dwWorkThreadId, THREAD_MSG_NEXT_FRAME, 0, 0);
 }
-void CRemoteDesktop::OnSetMaxFps(DWORD dwMaxFps){
-	m_dwMaxFps = dwMaxFps;
+
+void CRemoteDesktop::OnScreenShot(){
+	PostThreadMessage(m_dwWorkThreadId, THREAD_MSG_GET_BMP_FILE, 0, 0);
 }
 
 void CRemoteDesktop::OnControl(CtrlParam*pParam)
@@ -384,7 +419,7 @@ void CRemoteDesktop::OnControl(CtrlParam*pParam)
 		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_MIDDLEDOWN|MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0);
 		break;
 		//
-	case 0x020A:		//mouse wheel
+	case WM_MOUSEWHEEL:		//mouse wheel
 		mouse_event(MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_WHEEL, 0, 0, pParam->dwExtraData, 0);
 		break;
 	default:

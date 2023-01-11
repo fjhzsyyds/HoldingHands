@@ -178,7 +178,12 @@ BEGIN
             MENUITEM "10",                          ID_MAXFPS_10
             MENUITEM "20",                          ID_MAXFPS_20
             MENUITEM "30",                          ID_MAXFPS_30
-            MENUITEM "NoLimit",                     ID_MAXFPS_NOLIMIT
+            MENUITEM "60",                          ID_MAXFPS_NOLIMIT
+        END
+        POPUP "Quality"
+        BEGIN
+            MENUITEM "Low",                         ID_QUALITY_LOW
+            MENUITEM "High",                        ID_QUALITY_HIGH
         END
         MENUITEM "FullScreen",                  ID_DISPLAY_FULLSCREEN
     END
@@ -245,13 +250,13 @@ CAPTION "Getting file info......"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     CONTROL         "",IDC_TRANS_PROGRESS,"msctls_progress32",0x0,17,46,311,11
-    EDITTEXT        IDC_EDIT1,7,67,333,86,ES_MULTILINE | ES_AUTOHSCROLL | ES_READONLY | WS_VSCROLL
     LTEXT           "Current File :",IDC_STATIC,19,13,53,13
     LTEXT           "0.00 MB / 0.00 MB (100%)",IDC_TOTAL_PROGRESS,227,31,107,13
     LTEXT           "temp\\temp\\temp.temp",IDC_CURRENT_FILE,76,13,146,26
     LTEXT           "Total Progress:",IDC_STATIC,19,31,53,13
     LTEXT           "0.00 MB / 0.00 MB (100%)",IDC_CURRENT_PROGRESS,227,13,107,13
     GROUPBOX        "",IDC_STATIC,7,3,333,62
+    CONTROL         "",IDC_RICHEDIT21,"RichEdit20W",ES_MULTILINE | ES_AUTOHSCROLL | ES_READONLY | WS_BORDER | WS_VSCROLL | WS_TABSTOP,7,66,333,87
 END
 
 IDD_URL_INPUT DIALOGEX 0, 0, 360, 26

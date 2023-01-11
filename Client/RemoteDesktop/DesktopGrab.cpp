@@ -1,9 +1,15 @@
 #include "DesktopGrab.h"
+
+
 #include <stdio.h>
 #pragma comment(lib,"yuv.lib")
 #pragma comment(lib,"libx264.lib")
 #define REMOTEDESKTOP_FLAG_CAPTURE_MOUSE		(0x1)
 #define REMOTEDESKTOP_FLAG_CAPTURE_TRANSPARENT	(0x2)
+
+
+#define QUALITY_LOW		0
+#define QUALITY_HIGH	2
 
 CDesktopGrab::CDesktopGrab()
 {
@@ -26,7 +32,6 @@ CDesktopGrab::CDesktopGrab()
 	m_pPicIn = NULL;
 	m_pPicOut = NULL;
 
-	//m_bUseDxgiGrab = FALSE;
 }
 
 
@@ -35,12 +40,10 @@ CDesktopGrab::~CDesktopGrab()
 	GrabTerm();
 }
 
+
+
 void CDesktopGrab::GrabTerm()
 {
-	/*if (m_bUseDxgiGrab){
-		m_DxgiGrab.GrabTerm();
-	}*/
-	//
 	if (m_pEncoder)
 	{
 		x264_encoder_close(m_pEncoder);
@@ -80,59 +83,50 @@ void CDesktopGrab::GrabTerm()
 	m_dwScreenHeight = 0;
 	m_dwScreenWidth = 0;
 }
-BOOL CDesktopGrab::GrabInit()
+
+BOOL CDesktopGrab::GrabInit(DWORD dwFps, DWORD Quality)
 {
 	x264_param_t param = { 0 };
 	BITMAPINFO bmi = { 0 };
 	//先把之前的资源释放.
 	GrabTerm();
 
-	/*if (m_DxgiGrab.GrabInit()){
-		m_bUseDxgiGrab = TRUE;
-		m_DxgiGrab.GetScreenSize(m_dwWidth, m_dwHeight);
-		
-		m_dwBpp = 32;
-		m_dwStride = m_dwWidth * 4;
-
-		printf("%d %d\n",m_dwWidth,m_dwHeight);
+	m_hDC = GetDC(NULL);
+	if (m_hDC == NULL){
+		goto Error;
 	}
-	else{*/
-		//GDI grab
-		m_hDC = GetDC(NULL);
-		if (m_hDC == NULL){
-			goto Error;
-		}
-		m_dwHeight = GetDeviceCaps(m_hDC, DESKTOPVERTRES);
-		m_dwWidth = GetDeviceCaps(m_hDC, DESKTOPHORZRES);
-		m_dwBpp = GetDeviceCaps(m_hDC, BITSPIXEL);
+	m_dwHeight = GetDeviceCaps(m_hDC, DESKTOPVERTRES);
+	m_dwWidth = GetDeviceCaps(m_hDC, DESKTOPHORZRES);
+	m_dwBpp = GetDeviceCaps(m_hDC, BITSPIXEL);
 
-		//printf("Width:%d Height:%d\n",m_dwWidth,m_dwHeight);
+	//printf("Width:%d Height:%d\n",m_dwWidth,m_dwHeight);
 
-		m_dwScreenHeight = GetDeviceCaps(m_hDC, VERTRES);
-		m_dwScreenWidth = GetDeviceCaps(m_hDC, HORZRES);
-		//
-		m_hMemDC = CreateCompatibleDC(m_hDC);
-		if (m_hMemDC == NULL)
-		{
-			//printf("Create Compatible DC Failed!\n");
-			goto Error;
-		}//
-		bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-		bmi.bmiHeader.biWidth = m_dwWidth;
-		bmi.bmiHeader.biHeight = m_dwHeight;
-		bmi.bmiHeader.biPlanes = 1;
-		bmi.bmiHeader.biBitCount = m_dwBpp;
-		bmi.bmiHeader.biCompression = BI_RGB;
-		//
-		m_hBmp = CreateDIBSection(m_hMemDC, &bmi, DIB_RGB_COLORS, &m_Buffer, 0, 0);
-		if (m_hBmp == NULL || !SelectObject(m_hMemDC, m_hBmp))
-		{
-			//printf("Create DIB Section Failed! || SelectObject Failed!\n");
-			goto Error;
-		}//
-		GetObject(m_hBmp, sizeof(BITMAP), &m_Bmp);
-		m_dwStride = m_Bmp.bmWidthBytes;
-	//}
+	m_dwScreenHeight = GetDeviceCaps(m_hDC, VERTRES);
+	m_dwScreenWidth = GetDeviceCaps(m_hDC, HORZRES);
+	//
+	m_hMemDC = CreateCompatibleDC(m_hDC);
+	if (m_hMemDC == NULL)
+	{
+		//printf("Create Compatible DC Failed!\n");
+		goto Error;
+	}//
+	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bmi.bmiHeader.biWidth = m_dwWidth;
+	bmi.bmiHeader.biHeight = m_dwHeight;
+	bmi.bmiHeader.biPlanes = 1;
+	bmi.bmiHeader.biBitCount = m_dwBpp;
+	bmi.bmiHeader.biCompression = BI_RGB;
+	//
+	m_hBmp = CreateDIBSection(m_hMemDC, &bmi, DIB_RGB_COLORS, &m_Buffer, 0, 0);
+	if (m_hBmp == NULL || !SelectObject(m_hMemDC, m_hBmp))
+	{
+		//printf("Create DIB Section Failed! || SelectObject Failed!\n");
+		goto Error;
+	}//
+
+	GetObject(m_hBmp, sizeof(BITMAP), &m_Bmp);
+	m_dwStride = m_Bmp.bmWidthBytes;
+
 	//
 	m_pPicIn = (x264_picture_t*)calloc(1,sizeof(x264_picture_t));
 	m_pPicOut = (x264_picture_t*)calloc(1,sizeof(x264_picture_t));
@@ -152,9 +146,17 @@ BOOL CDesktopGrab::GrabInit()
 	param.i_keyint_max = 10;
 	param.i_bframe = 0;					//不启用b帧
 	param.b_open_gop = 0;
-	param.i_fps_num = 1;
+
+	param.i_fps_num = dwFps;
 	param.i_csp = X264_CSP_I420;
-	
+
+	if (Quality == QUALITY_LOW){
+		//平均码率?
+		param.rc.i_rc_method = X264_RC_ABR;
+		param.rc.i_bitrate = 1800;
+	}
+
+	//设置profile.
 	x264_param_apply_profile(&param, x264_profile_names[0]);
 
 	m_pEncoder = x264_encoder_open(&param);
@@ -168,40 +170,71 @@ Error:
 	GrabTerm();
 	return FALSE;
 }
+
 void CDesktopGrab::GetDesktopSize(DWORD *pWidth, DWORD*pHeight)
 {
 	*pWidth = m_dwWidth&0xfffffffe;
 	*pHeight = m_dwHeight&0xfffffffe;
 }
+
+BOOL CDesktopGrab::GetBmpFile(char**lppBuffer, DWORD*lpSize){
+	DWORD dwBitsSize = 0, dwBufferSize = 0;
+	BITMAPINFOHEADER bi = { 0 };
+	BITMAPFILEHEADER bmfHeader = { 0 };
+	char * lpBuffer = NULL;
+
+	if (!m_Bmp.bmHeight || !m_Bmp.bmWidth){
+		return FALSE;
+	}
+	
+	bi.biSize = sizeof(BITMAPINFOHEADER);
+	bi.biWidth = m_Bmp.bmWidth;
+	bi.biHeight = m_Bmp.bmHeight;
+	bi.biPlanes = 1;
+	bi.biBitCount = m_Bmp.bmBitsPixel;
+	bi.biCompression = BI_RGB;
+
+	dwBitsSize = m_Bmp.bmWidthBytes * m_Bmp.bmHeight;
+
+	dwBufferSize += sizeof(BITMAPFILEHEADER);
+	dwBufferSize += sizeof(BITMAPINFOHEADER);
+	dwBufferSize += dwBitsSize;
+
+	lpBuffer = new char[dwBufferSize];
+
+	bmfHeader.bfType = 0x4D42;
+	bmfHeader.bfOffBits = (DWORD)sizeof(BITMAPFILEHEADER) + (DWORD)sizeof(BITMAPINFOHEADER);
+	bmfHeader.bfSize = dwBufferSize;
+
+	memcpy(lpBuffer, &bmfHeader, sizeof(bmfHeader));
+	memcpy(lpBuffer + sizeof(bmfHeader), &bi, sizeof(bi));
+
+	//get bits 
+	memcpy(lpBuffer + sizeof(BITMAPFILEHEADER) 
+		+ sizeof(BITMAPINFOHEADER), m_Bmp.bmBits, dwBitsSize);
+	*lppBuffer = lpBuffer, *lpSize = dwBufferSize;
+	return TRUE;
+}
+
 BOOL CDesktopGrab::GetFrame(char**ppbuffer, DWORD*pSize, DWORD dwCaptureFlags)
 {
 	*ppbuffer = NULL;
 	*pSize = NULL;
-	
 	BOOL	bResult = FALSE;
+	DWORD dwFlag = SRCCOPY;
 	//失败。
 	if (m_pEncoder == NULL)
 		return FALSE;
-	//当分辨率变化的时候截取会不完整.
-	//if (m_bUseDxgiGrab){
-	//	//
-	//	if (FALSE == m_DxgiGrab.GetFrame(&m_Buffer, 0)){
-	//		return FALSE;
-	//	}
-	//}
-	//else{
-
-	DWORD dwFlag = SRCCOPY;
+	
 	if (dwCaptureFlags&REMOTEDESKTOP_FLAG_CAPTURE_TRANSPARENT)
 		dwFlag |= CAPTUREBLT;
 	//截图
-	if (FALSE == BitBlt(m_hMemDC, 0, 0, m_dwWidth, m_dwHeight, m_hDC, 0, 0, dwFlag))
+	if (!BitBlt(m_hMemDC, 0, 0, m_dwWidth, m_dwHeight, m_hDC, 0, 0, dwFlag))
 		return FALSE;
 	//绘制鼠标
 	if (dwCaptureFlags&REMOTEDESKTOP_FLAG_CAPTURE_MOUSE)
 		DrawMouse();
 
-	//}
 	//转为yuv420,rgb是倒过来的.
 	int ImageWidth = m_dwWidth & 0xfffffffe;
 	int ImageHeight = m_dwHeight & 0xfffffffe;
@@ -211,12 +244,18 @@ BOOL CDesktopGrab::GetFrame(char**ppbuffer, DWORD*pSize, DWORD dwCaptureFlags)
 	switch (m_dwBpp)
 	{
 	case 24:
-		libyuv::RGB24ToI420((uint8_t*)m_Buffer, m_dwStride, m_pPicIn->img.plane[0], m_pPicIn->img.i_stride[0],
-			m_pPicIn->img.plane[1], m_pPicIn->img.i_stride[1], m_pPicIn->img.plane[2], m_pPicIn->img.i_stride[2], ImageWidth, ImageHeight);
+		libyuv::RGB24ToI420((uint8_t*)m_Buffer, m_dwStride, 
+			m_pPicIn->img.plane[0], m_pPicIn->img.i_stride[0],
+			m_pPicIn->img.plane[1], m_pPicIn->img.i_stride[1], 
+			m_pPicIn->img.plane[2], m_pPicIn->img.i_stride[2], 
+			ImageWidth, ImageHeight);
 		break;
 	case 32:
-		libyuv::ARGBToI420((uint8_t*)m_Buffer, m_dwStride, m_pPicIn->img.plane[0], m_pPicIn->img.i_stride[0],
-			m_pPicIn->img.plane[1], m_pPicIn->img.i_stride[1], m_pPicIn->img.plane[2], m_pPicIn->img.i_stride[2], ImageWidth, ImageHeight);
+		libyuv::ARGBToI420((uint8_t*)m_Buffer, m_dwStride,
+			m_pPicIn->img.plane[0], m_pPicIn->img.i_stride[0],
+			m_pPicIn->img.plane[1], m_pPicIn->img.i_stride[1],
+			m_pPicIn->img.plane[2], m_pPicIn->img.i_stride[2], 
+			ImageWidth, ImageHeight);
 		break;
 	default:
 		//只支持24,32位位图.
@@ -257,7 +296,8 @@ void CDesktopGrab::DrawMouse()
 			goto icon_error;
 		}
 		
-		DrawIcon(m_hMemDC, m_dwWidth *ci.ptScreenPos.x / m_dwScreenWidth,m_dwHeight * ci.ptScreenPos.y/m_dwScreenHeight, icon);
+		DrawIcon(m_hMemDC, m_dwWidth *ci.ptScreenPos.x / m_dwScreenWidth,
+			m_dwHeight * ci.ptScreenPos.y/m_dwScreenHeight, icon);
 icon_error:
 		if (info.hbmMask)
 			DeleteObject(info.hbmMask);

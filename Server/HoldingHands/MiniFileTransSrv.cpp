@@ -51,10 +51,8 @@ void CMiniFileTransSrv::OnClose()
 void CMiniFileTransSrv::OnOpen()
 {
 	m_pDlg = new CMiniFileTransDlg(this);
-	if (FALSE == m_pDlg->Create(IDD_FILETRANS,CWnd::GetDesktopWindow())){
-		Close();
-		return;
-	}
+	ASSERT(m_pDlg->Create(IDD_FILETRANS, CWnd::GetDesktopWindow()));
+
 	m_pDlg->ShowWindow(SW_SHOW);
 }
 
