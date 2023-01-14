@@ -6,6 +6,8 @@
 
 #pragma comment(lib,"ws2_32.lib")
 
+LPFN_CONNECTEX CIOCPClient::lpfnConnectEx = NULL;
+
 CIOCPClient::CIOCPClient(CManager*pManager,const char*ServerAddr, int ServerPort,
 	BOOL bReConnect, UINT MaxTryCount):
 	
@@ -92,7 +94,6 @@ BOOL CIOCPClient::TryConnect()
 {
 
 	INT				iResult = 0;
-	LPFN_CONNECTEX	lpfnConnectEx = NULL;
 	GUID			GuidConnectEx = WSAID_CONNECTEX;
 	DWORD			dwBytes;
 	SOCKET			temp;
@@ -376,7 +377,7 @@ void CIOCPClient::OnReadComplete(DWORD nTransferredBytes, BOOL bEOF)
 	}
 	//先把PacketHeader接收完
 	if (m_dwRead < PACKET_HEADER_LEN){
-		m_wsaReadBuf.buf = m_ReadPacket.GetBuffer();
+		m_wsaReadBuf.buf = m_ReadPacket.GetBuffer() + m_dwRead;
 		m_wsaReadBuf.len = PACKET_HEADER_LEN - m_dwRead;
 	}
 	else{

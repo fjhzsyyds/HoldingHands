@@ -116,6 +116,7 @@ void CClientContext::OnReadComplete(DWORD nTransferredBytes, DWORD dwFailedReaso
 			DWORD dwBodyLen = m_ReadPacket.GetBodyLen();
 			bMemEnough = m_ReadPacket.AllocateMem(dwBodyLen);
 		}
+
 		if (bOk && (m_dwRead - PACKET_HEADER_LEN>0)){
 			////通知接收了一部分
 			//m_pManager->ProcessCompletedPacket(PACKET_READ_PARTIAL, this, &m_ReadPacket);
