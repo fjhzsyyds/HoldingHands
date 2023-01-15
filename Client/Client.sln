@@ -21,6 +21,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FileDownloader", "FileDownl
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "KeyLogger", "KeyLogger\KeyLogger.vcxproj", "{F2313B9A-EFD3-43B2-8A06-ED75C12358A6}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SocksProxy", "SocksProxy\SocksProxy.vcxproj", "{5F68D993-C5E4-440F-9F7B-4518EB82A76B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -63,6 +65,10 @@ Global
 		{F2313B9A-EFD3-43B2-8A06-ED75C12358A6}.Debug|Win32.Build.0 = Debug|Win32
 		{F2313B9A-EFD3-43B2-8A06-ED75C12358A6}.Release|Win32.ActiveCfg = Release|Win32
 		{F2313B9A-EFD3-43B2-8A06-ED75C12358A6}.Release|Win32.Build.0 = Release|Win32
+		{5F68D993-C5E4-440F-9F7B-4518EB82A76B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{5F68D993-C5E4-440F-9F7B-4518EB82A76B}.Debug|Win32.Build.0 = Debug|Win32
+		{5F68D993-C5E4-440F-9F7B-4518EB82A76B}.Release|Win32.ActiveCfg = Release|Win32
+		{5F68D993-C5E4-440F-9F7B-4518EB82A76B}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

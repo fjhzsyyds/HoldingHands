@@ -43,6 +43,9 @@
 #define IDR_DATA2                       344
 #define IDD_KBD_LOG                     345
 #define IDR_CAM_MENU                    346
+#define IDR_SOCKS_PROXY_MENU            348
+#define IDD_DIALOG4                     349
+#define IDD_SOCKS_ADDR                  349
 #define IDC_EDIT1                       1000
 #define IDC_TRANS_PROGRESS              1001
 #define IDC_EDIT3                       1001
@@ -72,6 +75,7 @@
 #define IDC_FILE_NAME                   1023
 #define IDC_RICHEDIT21                  1023
 #define IDC_PROGRESS                    1024
+#define IDC_IPADDRESS1                  1024
 #define ID_MAIN                         32771
 #define ID_MAIN_STARTSERVER             32772
 #define ID_MAIN_SETTINGS                32773
@@ -153,14 +157,21 @@
 #define ID_DISPLAY_QUALITY              32850
 #define ID_QUALITY_LOW                  32851
 #define ID_QUALITY_HIGH                 32852
+#define ID_MAIN_STARTPROXY              32853
+#define ID_MAIN_STOP                    32854
+#define ID_VER_SOCKS                    32855
+#define ID_VER_SOCKS5                   32856
+#define ID_VER_SOCKS4                   32857
+#define ID_OPERATION_PROXY              32858
+#define ID_PROXY_SOCKSPROXY             32859
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        348
-#define _APS_NEXT_COMMAND_VALUE         32853
-#define _APS_NEXT_CONTROL_VALUE         1024
+#define _APS_NEXT_RESOURCE_VALUE        350
+#define _APS_NEXT_COMMAND_VALUE         32860
+#define _APS_NEXT_CONTROL_VALUE         1025
 #define _APS_NEXT_SYMED_VALUE           310
 #endif
 #endif

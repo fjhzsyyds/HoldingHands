@@ -107,6 +107,11 @@ BEGIN
         MENUITEM "Cmd",                         ID_OPERATION_CMD
         MENUITEM "ChatBox",                     ID_OPERATION_CHATBOX
         MENUITEM SEPARATOR
+        POPUP "Proxy"
+        BEGIN
+            MENUITEM "SocksProxy",                  ID_PROXY_SOCKSPROXY
+        END
+        MENUITEM SEPARATOR
         POPUP "Utils"
         BEGIN
             MENUITEM "Copy To Startup Menu",        ID_UTILS_COPYTOSTARTUP
@@ -213,6 +218,20 @@ BEGIN
         MENUITEM "Start",                       ID_CAPTURE_START
         MENUITEM "Record",                      ID_CAPTURE_RECORD
         MENUITEM "Screenshot",                  ID_CAPTURE_SCREENSHOT
+    END
+END
+
+IDR_SOCKS_PROXY_MENU MENU
+BEGIN
+    POPUP "Main"
+    BEGIN
+        MENUITEM "Start Proxy",                 ID_MAIN_STARTPROXY
+        MENUITEM "Stop",                        ID_MAIN_STOP
+    END
+    POPUP "Version"
+    BEGIN
+        MENUITEM "Socks4",                      ID_VER_SOCKS4
+        MENUITEM "Socks5",                      ID_VER_SOCKS5
     END
 END
 
@@ -427,6 +446,19 @@ BEGIN
     PUSHBUTTON      "Clean Log",IDC_BUTTON1,264,255,43,14
 END
 
+IDD_SOCKS_ADDR DIALOGEX 0, 0, 209, 86
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "SocksProxy"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "Start",IDOK,77,57,54,16
+    LTEXT           "Address:",IDC_STATIC,22,17,33,14
+    LTEXT           "Port:",IDC_STATIC,22,36,33,14
+    CONTROL         "",IDC_IPADDRESS1,"SysIPAddress32",WS_TABSTOP,60,14,116,14
+    EDITTEXT        IDC_EDIT1,60,35,116,15,ES_AUTOHSCROLL | ES_NUMBER
+    GROUPBOX        "",IDC_STATIC,7,3,196,76
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -582,6 +614,14 @@ BEGIN
         RIGHTMARGIN, 432
         TOPMARGIN, 7
         BOTTOMMARGIN, 271
+    END
+
+    IDD_SOCKS_ADDR, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 202
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 79
     END
 END
 #endif    // APSTUDIO_INVOKED

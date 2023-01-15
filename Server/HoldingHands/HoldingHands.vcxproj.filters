@@ -150,6 +150,18 @@
     <ClInclude Include="..\..\Client\Common\utils.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="SocksProxyWnd.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="SocksProxySrv.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="SocksProxyAddrDlg.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="IOCPProxyServer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="HoldingHands.cpp">
@@ -279,6 +291,18 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\..\Client\Common\utils.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="SocksProxySrv.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="SocksProxyAddrDlg.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="SocksProxyWnd.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="IOCPProxyServer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

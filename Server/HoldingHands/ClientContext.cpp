@@ -41,6 +41,11 @@ CClientContext::~CClientContext()
 
 int CClientContext::SendPacket(DWORD command,const char*data, int len,DWORD dwFlag)
 {
+	if (m_ClientSocket == INVALID_SOCKET){
+		SetEvent(m_SendPacketOver);
+		return -1;
+	}
+
 	for (;;){
 		//OnClose之后，会触发事件，这里就进不去了。
 		DWORD dwResult = WaitForSingleObject(m_SendPacketOver, 500);

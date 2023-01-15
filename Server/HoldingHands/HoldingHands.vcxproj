@@ -128,6 +128,7 @@
     <ClInclude Include="Config.h" />
     <ClInclude Include="EditCommentDlg.h" />
     <ClInclude Include="InvalidHandler.h" />
+    <ClInclude Include="IOCPProxyServer.h" />
     <ClInclude Include="MsgHandler.h" />
     <ClInclude Include="FileManagerDlg.h" />
     <ClInclude Include="FileManagerSrv.h" />
@@ -150,6 +151,9 @@
     <ClInclude Include="RemoteDesktopWnd.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="SettingDlg.h" />
+    <ClInclude Include="SocksProxyAddrDlg.h" />
+    <ClInclude Include="SocksProxySrv.h" />
+    <ClInclude Include="SocksProxyWnd.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="UrlInputDlg.h" />
@@ -174,6 +178,7 @@
     <ClCompile Include="Config.cpp" />
     <ClCompile Include="EditCommentDlg.cpp" />
     <ClCompile Include="InvalidHandler.cpp" />
+    <ClCompile Include="IOCPProxyServer.cpp" />
     <ClCompile Include="MsgHandler.cpp" />
     <ClCompile Include="FileManagerDlg.cpp" />
     <ClCompile Include="FileManagerSrv.cpp" />
@@ -196,6 +201,9 @@
     <ClCompile Include="RemoteDesktopSrv.cpp" />
     <ClCompile Include="RemoteDesktopWnd.cpp" />
     <ClCompile Include="SettingDlg.cpp" />
+    <ClCompile Include="SocksProxyAddrDlg.cpp" />
+    <ClCompile Include="SocksProxySrv.cpp" />
+    <ClCompile Include="SocksProxyWnd.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
