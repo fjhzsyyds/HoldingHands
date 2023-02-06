@@ -8,3 +8,4 @@ Debug
 ipch
 client_exe
 data
+Server/modules/*.lib

@@ -35,3 +35,9 @@
 		0.2 客户端使用IOCP,服务器使用CSocket
 		0.3 客户端使用IOCP,服务器使用CSocket + CThread (单独一个Thread 跑服务器)
 		0.4 客户端使用IOCP,服务器使用IOCP (最终还是使用了IOCP,前面的效率太低了,而且CSocket会造成窗口卡顿)
+
+2023.01.21.19.57:
+	- 1. 重构代码...去除了CManager这个蹩脚的类.(不要瞎抽象)
+
+2023.01.24.19.51:
+	- 1. 修改Camera窗口,增加CCameraWnd类,删除CCameraDlg类
