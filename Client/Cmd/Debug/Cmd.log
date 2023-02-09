@@ -1,0 +1,41 @@
+﻿生成启动时间为 2023/1/29 23:13:06。
+     1>项目“E:\MyProjects\RAT\Client\Cmd\Cmd.vcxproj”在节点 4 上(Build 个目标)。
+     1>ClCompile:
+         D:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /Od /Oy- /D WIN32 /D _DEBUG /D _WINDOWS /D _USING_V110_SDK71_ /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt ..\Common\IOCPClient.cpp ..\Common\MsgHandler.cpp ..\Common\utils.cpp Cmd.cpp main.cpp
+         utils.cpp
+     1>e:\myprojects\rat\client\common\utils.cpp(58): warning C4244: “初始化”: 从“LONGLONG”转换到“double”，可能丢失数据
+     1>e:\myprojects\rat\client\common\utils.cpp(68): warning C4996: 'swprintf': swprintf has been changed to conform with the ISO C standard, adding an extra character count parameter. To use traditional Microsoft swprintf, set _CRT_NON_CONFORMING_SWPRINTFS.
+                 d:\program files (x86)\microsoft visual studio 12.0\vc\include\swprintf.inl(85) : 参见“swprintf”的声明
+     1>e:\myprojects\rat\client\common\utils.cpp(82): warning C4800: “BOOL”: 将值强制为布尔值“true”或“false”(性能警告)
+     1>e:\myprojects\rat\client\common\utils.cpp(88): warning C4800: “BOOL”: 将值强制为布尔值“true”或“false”(性能警告)
+     1>e:\myprojects\rat\client\common\utils.cpp(102): warning C4800: “BOOL”: 将值强制为布尔值“true”或“false”(性能警告)
+     1>e:\myprojects\rat\client\common\utils.cpp(108): warning C4800: “BOOL”: 将值强制为布尔值“true”或“false”(性能警告)
+     1>e:\myprojects\rat\client\common\utils.cpp(122): warning C4800: “BOOL”: 将值强制为布尔值“true”或“false”(性能警告)
+     1>e:\myprojects\rat\client\common\utils.cpp(128): warning C4800: “BOOL”: 将值强制为布尔值“true”或“false”(性能警告)
+     1>e:\myprojects\rat\client\common\utils.cpp(209): warning C4996: 'vsnprintf': This function or variable may be unsafe. Consider using vsnprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 d:\program files (x86)\microsoft visual studio 12.0\vc\include\stdio.h(337) : 参见“vsnprintf”的声明
+     1>e:\myprojects\rat\client\common\utils.cpp(214): warning C4996: 'localtime': This function or variable may be unsafe. Consider using localtime_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 d:\program files (x86)\microsoft visual studio 12.0\vc\include\time.inl(112) : 参见“localtime”的声明
+     1>e:\myprojects\rat\client\common\utils.cpp(216): warning C4996: 'sprintf': This function or variable may be unsafe. Consider using sprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 d:\program files (x86)\microsoft visual studio 12.0\vc\include\stdio.h(356) : 参见“sprintf”的声明
+     1>e:\myprojects\rat\client\common\utils.cpp(218): warning C4996: 'sprintf': This function or variable may be unsafe. Consider using sprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 d:\program files (x86)\microsoft visual studio 12.0\vc\include\stdio.h(356) : 参见“sprintf”的声明
+         MsgHandler.cpp
+         正在生成代码...
+         正在跳过...(未检测到相关更改)
+         main.cpp
+         Cmd.cpp
+         IOCPClient.cpp
+       Link:
+         D:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"E:\MyProjects\RAT\Client\Debug\shell.exe" /INCREMENTAL /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"E:\MyProjects\RAT\Client\Debug\shell.pdb" /SUBSYSTEM:CONSOLE,"5.01" /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"E:\MyProjects\RAT\Client\Debug\shell.lib" /MACHINE:X86 Debug\IOCPClient.obj
+         Debug\MsgHandler.obj
+         Debug\Packet.obj
+         Debug\utils.obj
+         Debug\Cmd.obj
+         Debug\main.obj
+         Cmd.vcxproj -> E:\MyProjects\RAT\Client\Debug\shell.exe
+     1>已完成生成项目“E:\MyProjects\RAT\Client\Cmd\Cmd.vcxproj”(Build 个目标)的操作。
+
+生成成功。
+
+已用时间 00:00:01.57

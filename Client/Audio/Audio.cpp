@@ -1,6 +1,9 @@
 #include "Audio.h"
 
 
+
+volatile unsigned int CAudio::nInstance = 0;
+
 CAudio::CAudio(CIOCPClient *pClient) :
 CMsgHandler(pClient, AUDIO)
 {
@@ -16,13 +19,21 @@ CAudio::~CAudio()
 
 void CAudio::OnOpen()
 {
-
+	if (InterlockedExchangeAdd(&nInstance, 1) > 0){
+		//已经有一个实例了.
+		TCHAR szError[] = TEXT("One instance is already running");
+		SendMsg(AUDIO_ERROR, szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
+		SendMsg(-1, NULL, 0);
+		Close();
+		return;
+	}
 }
 
 void CAudio::OnClose()
 {
 	OnAudioStop();
 	OnAudioPlayStop();
+	InterlockedDecrement(&nInstance);
 }
 
 void CAudio::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer)

@@ -13,6 +13,7 @@
 #define FRAME_QUEUE_SIZE		3
 
 
+volatile unsigned int CRemoteDesktop::nInstance = 0;
 
 CRemoteDesktop::CRemoteDesktop(CIOCPClient *pClient) :
 CMsgHandler(pClient, REMOTEDESKTOP)
@@ -43,6 +44,15 @@ CRemoteDesktop::~CRemoteDesktop()
 
 void CRemoteDesktop::OnOpen()
 {
+	if (InterlockedExchangeAdd(&nInstance, 1) > 0){
+		//已经有一个实例了.
+		TCHAR szError[] = TEXT("One instance is already running");
+		SendMsg(REMOTEDESKTOP_ERROR, szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
+		SendMsg(-1, NULL, 0);
+		Close();
+		return;
+	}
+
 	//剪切板监视.
 	m_ClipbdListenerThread = CreateThread(0, 0,
 		(LPTHREAD_START_ROUTINE)ClipdListenProc, this, 0, 0);
@@ -65,6 +75,8 @@ void CRemoteDesktop::OnClose()
 	}
 
 	TermRD();
+
+	InterlockedDecrement(&nInstance);
 }
 
 
@@ -339,7 +351,9 @@ void CALLBACK CRemoteDesktop::DesktopGrabThread(CRemoteDesktop*pThis){
 					Elapse = 1.0 * (liCurTime.QuadPart - liLastSendTime.QuadPart) / liFrequency.QuadPart
 						* 1000.0;
 					ElaspePerFrame = 1000.0 / pThis->m_dwMaxFps;			//毫秒.
-
+					__asm{
+						pause;
+					}
 				} while (Elapse < ElaspePerFrame + 1);
 
 				QueryPerformanceCounter(&liLastSendTime);

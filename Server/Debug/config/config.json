@@ -1,0 +1,23 @@
+
+{
+	"cam" : 
+	{
+		"record_save_path" : "data\\cam\\records",
+		"screenshot_save_path" : "data\\cam\\screenshot"
+	},
+	"filetrans" : 
+	{
+		"overwrite_file" : "true"
+	},
+	"remote_desktop" : 
+	{
+		"record_save_path" : "data\\screenshot\\records",
+		"screenshot_save_path" : "data\\remotedesktop\\screenshot"
+	},
+	"server" : 
+	{
+		"listen_port" : "10086",
+		"max_connections" : "10000",
+		"modules" : "E:\\MyProjects\\RAT\\Server\\modules"
+	}
+}

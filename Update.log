@@ -41,3 +41,7 @@
 
 2023.01.24.19.51:
 	- 1. 修改Camera窗口,增加CCameraWnd类,删除CCameraDlg类
+	
+2023.02.09.10.38：
+	- 1. 修改socks proxy界面
+	- 2. 修复socks proxy 的udp 中潜在的bug

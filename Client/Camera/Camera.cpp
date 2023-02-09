@@ -11,6 +11,8 @@
 
 #define STRSAFE_NO_DEPRECATE
 
+volatile unsigned int CCamera::nInstance = 0;
+
 CCamera::CCamera(CIOCPClient *pClient) :
 CMsgHandler(pClient, CAMERA){
 	m_bStop = FALSE;
@@ -24,6 +26,15 @@ CCamera::~CCamera(){
 
 void CCamera::OnOpen()
 {
+	if (InterlockedExchangeAdd(&nInstance, 1) > 0){
+		//已经有一个实例了.
+		TCHAR szError[] = TEXT("One instance is already running");
+		SendMsg(CAMERA_ERROR, szError, sizeof(TCHAR) * (lstrlen(szError) + 1));
+		SendMsg(-1, NULL, 0);
+		Close();
+		return;
+	}
+
 	const VideoInfoList&video_info = m_Grab.GetDeviceList();
 	Json::FastWriter writer;
 	Json::Value root;
@@ -43,8 +54,10 @@ void CCamera::OnOpen()
 
 void CCamera::OnClose()
 {
-	OnStop();
 	//一定要停止捕捉,否则线程继续发送会崩掉.
+	OnStop();
+	
+	InterlockedDecrement(&nInstance);
 }
 
 void CCamera::OnStart(const string &device_name,int width, int height)

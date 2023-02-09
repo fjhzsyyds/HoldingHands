@@ -19,25 +19,13 @@ CSocksProxySrv::~CSocksProxySrv()
 
 }
 
-void CSocksProxySrv::Log(TCHAR* Text,...){
-	if (m_pWnd){
-		TCHAR szBuffer[0x1000];
-		CString date = CTime(CTime::GetTickCount()).
-			Format("[%Y/%m/%d %H:%M:%S] ");
-		lstrcpy(szBuffer, date.GetBuffer());
-
-		va_list list;
-		va_start(list, Text);
-		wvsprintf(szBuffer + lstrlen(szBuffer), Text, list);
-		lstrcat(szBuffer, TEXT("\r\n"));
-
-		m_pWnd->SendMessage(WM_SOCKS_PROXY_LOG, (WPARAM)szBuffer);
-
-		va_end(list);
-	}
-}
 
 void CSocksProxySrv::OnClose(){
+	if (m_pServer){
+		delete m_pServer;
+		m_pServer = NULL;
+	}
+
 	if (m_pWnd){
 		if (m_pWnd->m_DestroyAfterDisconnect){
 			//窗口先关闭的.
@@ -50,11 +38,6 @@ void CSocksProxySrv::OnClose(){
 			m_pWnd->PostMessage(WM_SOCKS_PROXY_ERROR, (WPARAM)TEXT("Disconnect."));
 		}
 		m_pWnd = nullptr;
-	}
-
-	if (m_pServer){
-		delete m_pServer;
-		m_pServer = NULL;
 	}
 	return;
 }
@@ -70,6 +53,14 @@ void CSocksProxySrv::OnOpen(){
 
 DWORD CSocksProxySrv::GetConnections(){
 	return m_pServer->GetConnections();
+}
+
+void CSocksProxySrv::Disconnect(DWORD ClientID){
+	m_pServer->Disconnect(ClientID);
+}
+
+void CSocksProxySrv::UpdateInfo(void * param1, void * param2){
+	m_pWnd->SendMessage(WM_SOCKS_PROXY_UPDATE, (WPARAM)param1, (LPARAM)param2);
 }
 
 void CSocksProxySrv::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer){

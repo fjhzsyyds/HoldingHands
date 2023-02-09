@@ -29,8 +29,8 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWnd)
 	ON_COMMAND(ID_MAIN_STARTSERVER, &CMainFrame::OnMainStartserver)
 	ON_UPDATE_COMMAND_UI(ID_MAIN_STARTSERVER, &CMainFrame::OnUpdateMainStartserver)
 
-	ON_MESSAGE(WM_IOCP_SRV_START, OnSvrStarted)
-	ON_MESSAGE(WM_IOCP_SRV_CLOSE, OnSvrStopped)
+	ON_MESSAGE(WM_IOCP_SRV_START, OnSrvStarted)
+	ON_MESSAGE(WM_IOCP_SRV_CLOSE, OnSrvStopped)
 
 	//创建Handler对象
 	ON_MESSAGE(WM_SOCKET_CONNECT,OnSocketConnect)
@@ -80,7 +80,7 @@ CMainFrame::CMainFrame()
 	m_View = 0;
 	m_pServer = NULL;
 	m_bExitAfterStop = FALSE;
-	m_listenPort = 8081;
+	m_listenPort = 10086;
 
 	m_pServer = NULL;
 	m_pManager = NULL;
@@ -322,7 +322,7 @@ void CMainFrame::OnClose()
 /*****************************************************************************************************
 					服务器的通知
 ******************************************************************************************************/
-LRESULT CMainFrame::OnSvrStarted(WPARAM wParam,LPARAM lParam)
+LRESULT CMainFrame::OnSrvStarted(WPARAM wParam,LPARAM lParam)
 {
 	if (wParam == 0){
 		MessageBox(TEXT("Start Server Failed"), TEXT("Tips"), MB_OK | MB_ICONINFORMATION);
@@ -335,7 +335,7 @@ LRESULT CMainFrame::OnSvrStarted(WPARAM wParam,LPARAM lParam)
 	return 0;
 }
 
-LRESULT CMainFrame::OnSvrStopped(WPARAM wParam, LPARAM lParam)
+LRESULT CMainFrame::OnSrvStopped(WPARAM wParam, LPARAM lParam)
 {
 	m_ServerStatu = SRV_STATU_STOPPED;
 	/*Log(L"Server has stopped.");*/

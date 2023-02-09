@@ -4,7 +4,7 @@
 4. 摄像头和远程桌面录屏
 5. 文件搜索,加上下载功能....(方便快速获取指定的文件)
 6. 内网穿透功能(tcp和udp)
-7. socksproxy 实现bind和udp
+7. socksproxy 实现bind
 8. IOCPServer 写一个同用的框架.
 9. ProcessManager,WindowsManager,ServiceManager.
 10. 文件管理: 删除文件,移动文件,复制文件增加进度对话框.

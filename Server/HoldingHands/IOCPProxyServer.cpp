@@ -37,7 +37,9 @@ CIOCPProxyServer::CIOCPProxyServer(CSocksProxySrv*	pHandler){
 
 	InitializeCriticalSection(&m_cs);
 	//
+#ifdef _DEBUG
 	m_ClientObjCount = 0;
+#endif
 
 	m_UDPAssociateAddr = 0;
 }
@@ -69,14 +71,22 @@ CIOCPProxyServer::~CIOCPProxyServer()
 		}
 	}
 
+#ifdef _DEBUG
 	ASSERT(m_ClientObjCount == 0);
 	dbg_log("m_ClientObjCount == 0");
+#endif
 
 	CloseHandle(m_hCompletionPort);
 	m_hCompletionPort = INVALID_HANDLE_VALUE;
 
 	CloseHandle(m_hStopRunning);
 	DeleteCriticalSection(&m_cs);
+}
+
+void CIOCPProxyServer::Disconnect(DWORD ClientID){
+	ASSERT(ClientID < MAX_CLIENT_COUNT);
+	ASSERT(m_Clients[ClientID]);
+	m_Clients[ClientID]->CloseSocket();
 }
 
 ClientCtx::ClientCtx(CIOCPProxyServer*pServer, CSocksProxySrv*pHandler
@@ -115,18 +125,27 @@ ClientCtx::ClientCtx(CIOCPProxyServer*pServer, CSocksProxySrv*pHandler
 	m_LocalRefCount = 1;
 	m_RemoteRefCount = 1;
 
+	m_liUpload.QuadPart = 0;
+	m_liDownload.QuadPart = 0;
+
+#ifdef _DEBUG
 	InterlockedIncrement(&m_pServer->m_ClientObjCount);
+#endif
 }
 
 ClientCtx::~ClientCtx(){
 	DeleteCriticalSection(&m_cs);
 	ASSERT(m_ClientSocket == INVALID_SOCKET);
+#ifdef _DEBUG
 	InterlockedDecrement(&m_pServer->m_ClientObjCount);
+#endif
 }
 
 void ClientCtx::OnClose(){
 	BOOL bRelease = FALSE;
 	BOOL bLocalClose = FALSE;
+
+	dbg_log("client[%d] close,lref:%d ,rref:%d", m_ClientID, m_LocalRefCount, m_RemoteRefCount);
 
 	Lock(m_cs);
 	--m_LocalRefCount;
@@ -173,7 +192,7 @@ void ClientCtx::HandshakeHandle(){
 		case SOCKS5_VER:
 			if (m_Buffer[0] != 0x5){
 				CloseSocket();
-				m_pHandler->Log(TEXT("Client[%d] - Handshake Unmatched version : %d"), m_ClientID, m_Buffer[0]);
+				dbg_log("Client[%d] - Handshake Unmatched version : %d", m_ClientID, m_Buffer[0]);
 				goto Failed;
 			}
 			m_SubState++;
@@ -217,6 +236,13 @@ void ClientCtx::ProcessCmd(){
 			m_pHandler->WriteDword(m_ClientID);
 			m_pHandler->WriteBytes(m_Buffer, m_ReadSize);
 			m_pHandler->EndMsg();
+
+
+			m_liUpload.QuadPart += m_ReadSize;		//更新上传流量.
+			FlowInfo fi = { 0 };
+			fi.ClientID = m_ClientID;
+			fi.liFlow = m_liUpload;
+			m_pHandler->UpdateInfo((void*)UPDATE_UPLOAD, &fi);
 		}
 		Read(FALSE);
 		break;
@@ -239,7 +265,7 @@ void ClientCtx::RequestHandle(){
 			{
 			case SOCKS4_VER:
 				if (m_Buffer[0] != 0x4){
-					m_pHandler->Log(TEXT("Client[%d] - Unmatched version : %d"),m_ClientID, m_Buffer[0]);
+					dbg_log("Client[%d] - Unmatched version : %d",m_ClientID, m_Buffer[0]);
 					CloseSocket();
 					goto Failed;
 				}
@@ -247,7 +273,7 @@ void ClientCtx::RequestHandle(){
 				break;
 			case SOCKS4_CMD:
 				if (m_Buffer[1] != 0x1 && m_Buffer[1] != 0x2){
-					m_pHandler->Log(TEXT("Client[%d] - Unsupported Command : %d"), m_ClientID, m_Buffer[1]);
+					dbg_log("Client[%d] - Unsupported Command : %d", m_ClientID, m_Buffer[1]);
 					CloseSocket();
 					goto Failed;
 				}
@@ -287,7 +313,7 @@ void ClientCtx::RequestHandle(){
 			case SOCKS5_VER:
 				if (m_Buffer[0] != 0x5){
 					CloseSocket();
-					m_pHandler->Log(TEXT("Client[%d] - Unmatched version : %d"), m_ClientID, m_Buffer[0]);
+					dbg_log("Client[%d] - Unmatched version : %d", m_ClientID, m_Buffer[0]);
 					goto Failed;
 				}
 				m_SubState++;
@@ -295,7 +321,7 @@ void ClientCtx::RequestHandle(){
 			case SOCKS5_CMD:
 				if (m_Buffer[1] != 0x1 && m_Buffer[1] != 0x2
 					&& m_Buffer[1] != 0x3){
-					m_pHandler->Log(TEXT("Client[%d] - Unsupported Command : %d"), m_ClientID, m_Buffer[1]);
+					dbg_log("Client[%d] - Unsupported Command : %d", m_ClientID, m_Buffer[1]);
 					CloseSocket();
 					goto Failed;
 				}
@@ -322,7 +348,7 @@ void ClientCtx::RequestHandle(){
 					Read(TRUE, 1);
 				}
 				else{
-					m_pHandler->Log(TEXT("Client[%d] - Unsupported Address Type : %d"), m_ClientID, m_Buffer[3]);
+					dbg_log("Client[%d] - Unsupported Address Type : %d", m_ClientID, m_Buffer[3]);
 					CloseSocket();
 					goto Failed;
 				}
@@ -358,8 +384,11 @@ void ClientCtx::RequestHandle(){
 			}
 		}
 	}
+	//
 	if (m_Cmd == 0x3){
-		m_Port = 0;		//忽略Port,而是使用 第一次udp recvfrom 收到的client addr和port.
+		//这个函数是在WorkThread 中调用的,一定是在OnClose之前.
+		m_Port = 0;									//忽略Port,而是使用 第一次udp recvfrom 收到的client addr和port.
+		InterlockedIncrement(&m_LocalRefCount);		//本地将会开启两个socket.
 	}
 
 	if (m_pHandler){
@@ -394,6 +423,15 @@ void ClientCtx::Read(BOOL bContinue, DWORD Bytes){
 	m_pServer->PostRead(this);
 }
 
+/*
+	@ 2023.02.08
+	@ BUG触发条件.
+		1. 本地关闭,发送给客户端close信息
+		2. 收到客户端Cmd 响应,增加Local Ref
+		3. 收到客户端Close.关闭本地socket
+		4. 本地再次关闭,LocalRef 为0,发送给客户端close信息
+
+*/
 void ClientCtx::OnRequestResponse(DWORD Error){
 	TCHAR szAddr[256] = { 0 };
 	char *pAddr = NULL;
@@ -406,6 +444,7 @@ void ClientCtx::OnRequestResponse(DWORD Error){
 
 			if (m_UDPSocket == INVALID_SOCKET){
 				Error = WSAGetLastError();
+				InterlockedDecrement(&m_LocalRefCount);
 				Unlock(m_cs);
 				break;
 			}
@@ -416,6 +455,7 @@ void ClientCtx::OnRequestResponse(DWORD Error){
 
 			if (SOCKET_ERROR == bind(m_UDPSocket, (SOCKADDR*)&addr, sizeof(addr))){
 				Error = WSAGetLastError();
+				InterlockedDecrement(&m_LocalRefCount);
 				Unlock(m_cs);
 				break;
 			}
@@ -424,11 +464,10 @@ void ClientCtx::OnRequestResponse(DWORD Error){
 				CreateIoCompletionPort((HANDLE)m_UDPSocket,
 				m_pServer->m_hCompletionPort, (ULONG_PTR)this, 0)){
 				Error = WSAGetLastError();
+				InterlockedDecrement(&m_LocalRefCount);
 				Unlock(m_cs);
 				break;
 			}
-
-			++m_LocalRefCount;
 			RecvFrom();
 			Unlock(m_cs);
 			break;
@@ -451,25 +490,56 @@ void ClientCtx::OnRequestResponse(DWORD Error){
 				break;
 			}
 		}
+
 		if (!Error && m_Cmd == 0x3){
 			SOCKADDR_IN addr = { 0 };
 			int namelen = sizeof(addr);
 
-			//还是手动填写地址吧.
-			
 			//获取UDPsocket 端口号.
 			getsockname(m_UDPSocket, (SOCKADDR*)&addr, &namelen);
 			addr.sin_addr.S_un.S_addr = m_pServer->m_UDPAssociateAddr;
-
 			memcpy(&Packet[4], &addr.sin_addr, 4);
 			memcpy(&Packet[8], &addr.sin_port, 2);
 			
-			pAddr = inet_ntoa(addr.sin_addr);
-			MultiByteToWideChar(CP_ACP, 0, pAddr, strlen(pAddr), szAddr, 256);
-			m_pHandler->Log(TEXT("Client[%d] - UDP Relay: %s:%d"), m_ClientID,
-				szAddr, ntohs(addr.sin_port));
+			/////
+			ConInfo ci = { 0 };
+			ci.m_type = 0x1;
+			ci.m_ClientID = m_ClientID;
+
+			sprintf(ci.m_Remote, "%s:%d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+
+			ZeroMemory(&addr, sizeof(addr));
+			namelen = sizeof(addr);
+
+			getpeername(m_ClientSocket, (SOCKADDR*)&addr, &namelen);
+			sprintf(ci.m_Source,"%s:%d" ,inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+			m_pHandler->UpdateInfo(UPDATE_ADDCON, &ci);
 		}
 
+		//connect 命令.
+		if (!Error && m_Cmd == 0x1){
+			ConInfo ci = { 0 };
+			SOCKADDR_IN addr = { 0 };
+			int namelen = sizeof(addr);
+
+			ci.m_ClientID = m_ClientID;
+			ci.m_type = 0x0;
+			getpeername(m_ClientSocket, (SOCKADDR*)&addr, &namelen);
+			sprintf(ci.m_Source, "%s:%d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+
+			switch (m_AddrType)
+			{
+			case 0x1:
+				sprintf(ci.m_Remote, "%s:%d", inet_ntoa(*(in_addr*)m_Address), ntohs(m_Port));
+				break;
+			case 0x3:
+				sprintf(ci.m_Remote, "%s:%d", m_Address, ntohs(m_Port));
+				break;
+			default:
+				break;
+			}
+			m_pHandler->UpdateInfo(UPDATE_ADDCON, &ci);
+		}
 		send(m_ClientSocket,(char*)Packet, sizeof(Packet),0);
 	}
 	else if (m_Ver == 0x4){
@@ -480,30 +550,21 @@ void ClientCtx::OnRequestResponse(DWORD Error){
 		if (Error){
 			Packet[1] = 0x5b;
 		}
+		
+		if (!Error && m_Cmd == 0x1){
+			ConInfo ci = { 0 };
+			SOCKADDR_IN addr = { 0 };
+			int namelen = sizeof(addr);
+
+			ci.m_ClientID = m_ClientID;
+			ci.m_type = 0x0;
+			getpeername(m_ClientSocket, (SOCKADDR*)&addr, &namelen);
+			sprintf(ci.m_Source, "%s:%d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+			sprintf(ci.m_Remote, "%s:%d", inet_ntoa(*(in_addr*)m_Address), ntohs(m_Port));
+			m_pHandler->UpdateInfo(UPDATE_ADDCON, &ci);
+		}
 		//socks4 不支持udp.
 		send(m_ClientSocket, (char*)Packet, sizeof(Packet), 0);
-	}
-
-	//这里还得修改....
-	if (m_Cmd == 0x1){
-		switch (m_AddrType)
-		{
-		case 0x1:
-			pAddr = inet_ntoa(*(in_addr*)m_Address);
-			MultiByteToWideChar(CP_ACP, 0, pAddr, strlen(pAddr), szAddr, 256);
-			m_pHandler->Log(TEXT("Client[%d] - connect to %s ,error: %d"),
-				m_ClientID, szAddr, Error);
-			//dbg_log("connect to %s ,error: %d", inet_ntoa(*(in_addr*)m_Address), Error);
-			break;
-		case 0x3:
-			MultiByteToWideChar(CP_ACP, 0, (char*)m_Address, strlen((char*)m_Address), szAddr, 256);
-			m_pHandler->Log(TEXT("Client[%d] - connect to %s ,error: %d"),
-				m_ClientID, szAddr, Error);
-			//dbg_log("connect to %s ,error: %d", m_Address,Error);
-			break;
-		default:
-			break;
-		}
 	}
 }
 
@@ -524,12 +585,25 @@ void ClientCtx::OnRemoteData(char* Buffer, DWORD Size){
 	switch (m_Cmd)
 	{
 	case 0x1:
-		send(m_ClientSocket, Buffer, Size, 0);
+		do{
+			send(m_ClientSocket, Buffer, Size, 0);
+			m_liDownload.QuadPart += Size;
+
+			FlowInfo fi = { 0 };
+			fi.ClientID = m_ClientID;
+			fi.liFlow = m_liDownload;
+			m_pHandler->UpdateInfo((void*)UPDATE_DOWNLOAD, &fi);
+		} while (0);
 		break;
 	case 0x3:
 		dbg_log("udp recv from remote (%d bytes)", Size);
 		//再次打包数据发送.
 		do{
+			m_liDownload.QuadPart += Size - 10;
+			FlowInfo fi = { 0 };
+			fi.ClientID = m_ClientID;
+			fi.liFlow = m_liDownload;
+
 			SOCKADDR_IN ClientAddr = { 0 };
 			memcpy(&ClientAddr.sin_addr.S_un.S_addr, m_Address, 4);
 			ClientAddr.sin_family = AF_INET;
@@ -540,6 +614,8 @@ void ClientCtx::OnRemoteData(char* Buffer, DWORD Size){
 			memcpy(&Buffer[8], &m_Port, 2);
 			dbg_log("udp send to client (%s:%d)", inet_ntoa(ClientAddr.sin_addr), ntohs(m_Port));
 			sendto(m_UDPSocket, Buffer, Size, 0, (SOCKADDR*)&ClientAddr, sizeof(ClientAddr));
+
+			m_pHandler->UpdateInfo((void*)UPDATE_DOWNLOAD, &fi);
 		} while (0);
 		break;
 	default:
@@ -584,6 +660,26 @@ void ClientCtx::OnRecvFrom(){
 			m_pHandler->WriteDword(m_ClientID);
 			m_pHandler->WriteBytes(m_Datagram + 3, m_DatagramSize - 3);
 			m_pHandler->EndMsg();
+			//
+			
+			switch (m_Datagram[3])
+			{
+			case 0x1:
+				m_liUpload.QuadPart += m_DatagramSize - 3 - 1 - 6;
+				break;
+			case 0x3:
+				m_liUpload.QuadPart += m_DatagramSize - 3 - 1 - m_Datagram[4] - 2;
+				break;
+			case 0x4:
+				m_liUpload.QuadPart += m_DatagramSize - 3 - 1 - 18;
+				break;
+			default:
+				break;
+			}
+			FlowInfo fi = { 0 };
+			fi.ClientID = m_ClientID;
+			fi.liFlow = m_liUpload;
+			m_pHandler->UpdateInfo((void*)UPDATE_UPLOAD, &fi);
 		}
 		break;
 	}
@@ -718,15 +814,25 @@ void CIOCPProxyServer::OnAccept(BOOL bSuccess){
 	PostAccept();
 }
 
-void CIOCPProxyServer::ReleaseClient(ClientCtx*pClientCtx){
-	Lock(m_cs);
+/*
+	@ 2023.02.08
+	@ 修改内容:
+		1. 将UpdateInfo放到delete前面,原因:必须先从 List 中移除,要不然在delete 之后,Update之前可能会在UI界面 Disconnect操作
+			这样的话此时ClientID对应的Ctx是被释放了的....
 
+*/
+
+void CIOCPProxyServer::ReleaseClient(ClientCtx*pClientCtx){
 	DWORD ClientID = pClientCtx->m_ClientID;
+	m_pHandler->UpdateInfo((void*)UPDATE_DELCON, (void*)ClientID);			//
+
+	Lock(m_cs);
 	m_Clients[ClientID] = NULL;
 	m_pHandler->FreeClientID(ClientID);
-	delete pClientCtx;
-	
 	Unlock(m_cs);
+
+	delete pClientCtx;
+	dbg_log("Release Client[%d]", ClientID);
 }
 
 void CIOCPProxyServer::OnReadBytes(ClientCtx*pCtx, DWORD dwBytes){

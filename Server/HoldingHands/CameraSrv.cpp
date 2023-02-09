@@ -17,7 +17,7 @@ CCameraSrv::CCameraSrv(CClientContext*pClient) :
 	memset(&m_AVPacket, 0, sizeof(m_AVPacket));
 	memset(&m_AVFrame, 0, sizeof(m_AVFrame));
 
-	m_hMutex = CreateEvent(0, TRUE, TRUE, NULL);
+	m_hMutex = CreateEvent(0, FALSE, TRUE, NULL);
 }
 
 
@@ -223,6 +223,7 @@ void CCameraSrv::OnFrame(char*buffer,DWORD dwLen)
 				(uint8_t*)m_Buffer, m_Bmp.bmWidthBytes, m_Bmp.bmWidth, m_Bmp.bmHeight);
 			//显示到窗口上
 			m_pWnd->SendMessage(WM_CAMERA_FRAME, (WPARAM)m_hMemDC, (LPARAM)&m_Bmp);
+			SetEvent(m_hMutex);
 			return;
 		}
 	}
@@ -263,12 +264,13 @@ char * CCameraSrv::GetBmpFile(DWORD * lpDataSize){
 	memcpy(lpBuffer, &bmfHeader, sizeof(bmfHeader));
 	memcpy(lpBuffer + sizeof(bmfHeader), &bi, sizeof(bi));
 
-	ResetEvent(m_hMutex);		//lock
+	WaitForSingleObject(m_hMutex, INFINITE);		//lock
 	//get bits 
 	Result = GetDIBits(m_hMemDC, m_hBmp, 0,
 		m_Bmp.bmHeight, lpBuffer + 
 		sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER)
 		, (BITMAPINFO*)&bi, DIB_RGB_COLORS);
+
 	SetEvent(m_hMutex);			//unlock
 
 	if (Result != m_Bmp.bmHeight){

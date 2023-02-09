@@ -62,7 +62,7 @@ void GetStorageSizeString(LARGE_INTEGER Bytes, TCHAR* strBuffer){
 		((sizeof(MemUnits) / sizeof(MemUnits[0])) - 1)
 		){
 		MemUnitIdx++;
-		bytes /= 1024;
+		bytes /= 1000;
 	}
 
 	_t_sprintf(strBuffer, TEXT("%.2lf %s"), bytes, MemUnits[MemUnitIdx]);

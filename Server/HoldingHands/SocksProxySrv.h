@@ -1,6 +1,6 @@
 #pragma once
 #include "MsgHandler.h"
-
+#include "SocksProxyWnd.h"
 
 #define SOCKS_PROXY			(('S') | (('K') << 8) | (('P') << 16) | (('X') << 24))
 #define MAX_CLIENT_COUNT	1024
@@ -43,8 +43,8 @@ public:
 	BOOL StartProxyServer(UINT Port, DWORD Address,DWORD UDPAssociateAddr);
 	void SetSocksVersion(BYTE Version);
 	void StopProxyServer();
-
-	void Log(TCHAR* Text,...);
+	void Disconnect(DWORD ClientID);
+	void UpdateInfo(void * param1, void * param2);
 
 	void OnClose();					//当socket断开的时候调用这个函数
 	void OnOpen() ;				//当socket连接的时候调用这个函数

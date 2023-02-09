@@ -37,6 +37,7 @@ class CAudio :
 public:
 	CAudio(CIOCPClient *pClient);
 
+	static volatile unsigned int nInstance;
 	void OnClose();
 	void OnOpen();
 

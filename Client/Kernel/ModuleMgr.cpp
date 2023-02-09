@@ -1,6 +1,6 @@
 #include "ModuleMgr.h"
 #include <process.h>
-#include <stdio.h>
+#include "utils.h"
 
 CModuleMgr::CModuleMgr(CKernel*pKernel):
 m_pKernel(pKernel)
@@ -59,7 +59,7 @@ BOOL CModuleMgr::RunModule(const char*name, const char*ServerAddr, UINT uPort, L
 }
 
 void  __stdcall CModuleMgr::ThreadProc(RunCtx*pRunCtx){
-	auto mgr = pRunCtx->pMgr;
+	CModuleMgr* mgr = pRunCtx->pMgr;
 	auto module = mgr->m_loaded.find(pRunCtx->szName);
 
 	//尝试两次,,,,Close的时候可能多 SetEvent了一次，导致某些模块需要两次才行...
@@ -79,17 +79,18 @@ void  __stdcall CModuleMgr::ThreadProc(RunCtx*pRunCtx){
 	//module = mgr->m_loaded.find(pRunCtx->szName);
 	if (module != mgr->m_loaded.end()){
 		//load success..
+		dbg_log("load module successed :%s", pRunCtx->szName);
 		ModuleEntry entry = module->second.lpEntry;
 		entry(pRunCtx->szServerAddr, pRunCtx->uPort,(LPVOID)(((DWORD)pRunCtx->lpParam)&0x7fffffff));
 	}
-	//clean resource,the heighest bit is the flag of auto free.
+	//if the heighest bit is set,we should release the space of param after moudle exit.
 	if (((DWORD)(pRunCtx->lpParam)) & 0x80000000){
 		free((LPVOID)(((DWORD)pRunCtx->lpParam) & 0x7fffffff));
 		pRunCtx->lpParam = NULL;
 	}
 	//
 	delete pRunCtx;
-	printf("CModuleMgr::ThreadProc return\n");
+	dbg_log("CModuleMgr::ThreadProc return\n");
 	_endthreadex(0);
 }
 
@@ -115,7 +116,7 @@ void CModuleMgr::LoadModule(const char*buff,int size){
 	}
 	else{
 		//Load Module Filed(Maybe not found module);
-		
+		dbg_log("Load From Mem Failed...");
 	}
 	m_current_module_name = "";
 	SetEvent(m_hModuleTrans);

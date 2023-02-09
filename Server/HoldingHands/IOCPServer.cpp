@@ -55,6 +55,7 @@ CIOCPServer::CIOCPServer(CManager* pManager)
 	m_SpeedLock = 0;
 
 	m_hScanThread = NULL;
+	m_nThreadCount = 0;
 
 	InitializeCriticalSectionAndSpinCount(&m_csThread,5000);
 }
@@ -96,18 +97,12 @@ void CIOCPServer::AddToList(CClientContext*pContext)
 }
 
 //移除
-BOOL CIOCPServer::RemoveFromList(CClientContext*pContext)
+void CIOCPServer::RemoveFromList(CClientContext*pContext)
 {
-	BOOL bRet = FALSE;
 	EnterCriticalSection(&m_CtxListLock);
-	if (pContext->m_PosInList)
-	{
-		m_ClientContextList.RemoveAt(pContext->m_PosInList);
-		pContext->m_PosInList = NULL;
-		bRet = TRUE;
-	}
+	m_ClientContextList.RemoveAt(pContext->m_PosInList);
+	pContext->m_PosInList = NULL;
 	LeaveCriticalSection(&m_CtxListLock);
-	return bRet;
 }
 
 void CIOCPServer::GetSpeed(DWORD *lpReadSpeed , DWORD*lpWriteSpeed )
@@ -229,23 +224,26 @@ unsigned int __stdcall CIOCPServer::WorkerThread(void*)
 			}
 			
 			//检测线程.
-			EnterCriticalSection(&pServer->m_csThread);
-			++pServer->m_BusyCount;
+			if (InterlockedExchangeAdd(&pServer->m_BusyCount, 1) + 1 >= pServer->m_nThreadCount){
 
-			if (pServer->m_BusyCount == pServer->m_ThreadList.GetCount()){
-				//没有空余的线程.为了防止所有线程都是挂起(除GQCP)的状态,要创建新的线程
+				//没有空余的线程.为了防止所有线程都是挂起(除GQCP)的状态而造成思死锁,
+				//要创建新的线程
 				unsigned int ThreadId = 0;
 				HANDLE hThread = 0;
 				hThread = (HANDLE)_beginthreadex(0, 0, WorkerThread, 0, CREATE_SUSPENDED, &ThreadId);
 				
 				if (hThread != NULL && ThreadId !=NULL)
 				{
+					InterlockedIncrement(&pServer->m_nThreadCount);
+
+					EnterCriticalSection(&pServer->m_csThread);
 					pServer->m_ThreadList.SetAt((void*)ThreadId, hThread);
+					LeaveCriticalSection(&pServer->m_csThread);
+
 					ResumeThread(hThread);
 				}
 				//如果失败的话,emmm.......
 			}
-			LeaveCriticalSection(&pServer->m_csThread);
 
 			//dispatch io message 
 			pServer->HandlerIOMsg(pClientContext, nTransferredBytes, pOverlappedplus->m_IOtype, dwResult);
@@ -265,16 +263,19 @@ unsigned int __stdcall CIOCPServer::WorkerThread(void*)
 			}
 
 			//处理完IO事件
-			EnterCriticalSection(&pServer->m_csThread);
-			pServer->m_BusyCount--;					//线程一旦处理完IO消息,就递减
-			//当前线程数大于最大线程数.那么就让当前线程退出吧
-			if (pServer->m_ThreadList.GetCount() > pServer->m_MaxThreadCount)
-			{
-				ASSERT(pServer->m_ThreadList.Lookup((void*)CurrentThreadId, hCurrentThread));
+			InterlockedDecrement(&pServer->m_BusyCount);
+
+			if (InterlockedExchangeAdd(&pServer->m_nThreadCount, -1) > pServer->m_MaxThreadCount){	
+				EnterCriticalSection(&pServer->m_csThread);
+				pServer->m_ThreadList.Lookup((void*)CurrentThreadId, hCurrentThread);
 				pServer->m_ThreadList.RemoveKey((void*)CurrentThreadId);
+				LeaveCriticalSection(&pServer->m_csThread);
+
 				bInPool = FALSE;//让这个线程结束吧
 			}
-			LeaveCriticalSection(&pServer->m_csThread);
+			else{
+				InterlockedIncrement(&pServer->m_nThreadCount);
+			}
 		}
 		if (pOverlappedplus) 
 			delete pOverlappedplus;
@@ -512,9 +513,9 @@ BOOL CIOCPServer::StartServer(USHORT uPort)
 		hThread = (HANDLE)_beginthreadex(0, 0, WorkerThread, 0, 0, &ThreadId);
 		if (hThread && ThreadId){
 			m_ThreadList.SetAt((void*)ThreadId, hThread);
+			++m_nThreadCount;
 		}
 	}
-
 	//-------------------------------------------------------------------------------------------------------------
 	//Beign accepting client socket;
 	ResetEvent(m_hStopRunning);				//Means the server is ready for accepting client 
@@ -603,6 +604,7 @@ void CIOCPServer::StopServer()
 	m_MaxThreadCount = 0;
 	m_MaxConcurrent = 0;
 	m_BusyCount = 0;
+	m_nThreadCount = 0;
 
 	//关闭完成端口
 	m_ReadSpeed = 0;

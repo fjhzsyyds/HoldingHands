@@ -81,10 +81,11 @@ private:
 	CRITICAL_SECTION	m_CtxListLock;
 	//==============================================================================
 	//IOCP
-	DWORD					m_BusyCount;							//已经获取IO事件的线程数
 	DWORD					m_MaxConcurrent;						//IOCP最大并发数量
-	DWORD					m_MaxThreadCount;						//线程最多有几个.
 
+	volatile DWORD			m_BusyCount;							//已经获取IO事件的线程数
+	volatile DWORD			m_nThreadCount;							//当前线程数.
+	DWORD					m_MaxThreadCount;						//线程最多有几个.
 	//超时检测线程
 	HANDLE					m_hScanThread;
 
@@ -111,7 +112,7 @@ private:
 	//加到list里面
 	void AddToList(CClientContext*pContext);
 	//移除
-	BOOL RemoveFromList(CClientContext*pContext);
+	void RemoveFromList(CClientContext*pContext);
 	//有连接了
 	void OnAcceptComplete(DWORD dwFailedReason);
 

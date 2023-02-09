@@ -20,6 +20,7 @@ private:
 	HANDLE		m_hWorkThread;
 
 public:
+	static volatile unsigned int nInstance;
 
 	void OnStart(const string &device_name, int width, int height);
 	void OnStop();

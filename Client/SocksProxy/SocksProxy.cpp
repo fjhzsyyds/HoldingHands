@@ -152,9 +152,11 @@ void CSocksProxy::OnReadMsg(WORD Msg, DWORD dwSize, char*Buffer){
 
 //只有在本地和远程都发送关闭消息后才删除Ctx.
 void CSocksProxy::OnProxyClose(DWORD ClientID){
+	dbg_log("Client[%d] Close", ClientID);
 
 	assert(ClientID < MAX_CLIENT_COUNT);
-	assert(m_Clients[ClientID]);
+	assert(m_Clients[ClientID]);											//????触发异常了.
+
 	ClientCtx*pCtx = m_Clients[ClientID];
 
 	if (!pCtx->m_bNoRequest){
@@ -164,7 +166,7 @@ void CSocksProxy::OnProxyClose(DWORD ClientID){
 			closesocket(pCtx->m_RemoteSock);
 			pCtx->m_RemoteSock = INVALID_SOCKET;
 			
-			pCtx->m_pHandler->SendMsg(SOCK_PROXY_CLOSE,   //在这里....
+			SendMsg(SOCK_PROXY_CLOSE,   //在这里....
 				//,有可能之后还有个Request..
 				&pCtx->m_dwClientID, sizeof(pCtx->m_dwClientID));
 		}
@@ -176,12 +178,12 @@ void CSocksProxy::OnProxyClose(DWORD ClientID){
 	}
 	else{
 		//之后是没有机会发送 SOCK_PROXY_CMD_CONNECT_CLOSE
-		pCtx->m_pHandler->SendMsg(SOCK_PROXY_CLOSE,		//在这里....
+		SendMsg(SOCK_PROXY_CLOSE,		//在这里....
 			//,有可能之后还有个Request..
 			&pCtx->m_dwClientID, sizeof(pCtx->m_dwClientID));
 	}
 
-	dbg_log("Client[%d] Close",ClientID);
+	dbg_log("Client[%d] Close Finished", ClientID);
 	m_Clients[ClientID] = NULL;
 	delete pCtx;
 }

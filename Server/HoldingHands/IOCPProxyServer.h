@@ -1,6 +1,5 @@
 #pragma once
 #include "SocksProxySrv.h"
-#include <map>
 
 #define SOCKS_ACCEPT	0
 #define SOCKS_READ		1
@@ -76,6 +75,10 @@ public:
 	CSocksProxySrv*		m_pHandler;
 
 	//
+	LARGE_INTEGER	m_liUpload;
+	LARGE_INTEGER	m_liDownload;
+
+	//
 	SOCKET		m_ClientSocket;
 	DWORD		m_Cmd;			//命令类型.
 	//
@@ -87,7 +90,7 @@ public:
 
 	//TCP .Buf ....
 	DWORD		m_NeedBytes;
-	BYTE		m_Buffer[0x1000];
+	BYTE		m_Buffer[0x2000];
 	DWORD		m_ReadSize;
 
 	//UDP 
@@ -174,8 +177,11 @@ private:
 	BYTE			m_SocksVersion;
 	CSocksProxySrv*	m_pHandler;
 
+#ifdef _DEBUG
 	//Obj 计数
 	volatile DWORD  m_ClientObjCount;
+#endif
+
 public:
 	void PostRecvFrom(ClientCtx*pClientCtx);
 	void PostRead(ClientCtx*pClientCtx);
@@ -183,6 +189,7 @@ public:
 
 	static unsigned int __stdcall WorkerThread(CIOCPProxyServer*pServer);
 	
+	void Disconnect(DWORD ClientID);
 	BOOL StartServer(DWORD Port, DWORD Address, DWORD UDPAssociateAddr);
 	void StopServer();
 

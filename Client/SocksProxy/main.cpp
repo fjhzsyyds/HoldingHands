@@ -30,7 +30,7 @@ LONG WINAPI Filter(
 int main(){
 	SetUnhandledExceptionFilter(Filter);
 	CIOCPClient::SocketInit();
-	ModuleEntry("127.0.0.1", 8081, 0);
+	ModuleEntry("192.168.0.110", 10086, 0);
 	//ModuleEntry("49.235.129.40", 8081, 0);
 	CIOCPClient::SocketTerm();
 	return 0;

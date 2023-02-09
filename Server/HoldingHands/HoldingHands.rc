@@ -234,9 +234,10 @@ BEGIN
         MENUITEM "Socks4",                      ID_VER_SOCKS4
         MENUITEM "Socks5",                      ID_VER_SOCKS5
     END
-    POPUP "Log"
+    POPUP "Connections"
     BEGIN
-        MENUITEM "Clear",                       ID_LOG_CLEAR
+        MENUITEM "Disconnect",                  ID_CONNECTIONS_DISCONNECT
+        MENUITEM "DisconnectAll",               ID_CONNECTIONS_DISCONNECTALL
     END
 END
 

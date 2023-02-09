@@ -82,8 +82,8 @@ public:
 
 	afx_msg void OnUpdateStatuBar();
 	//服务器开启和关闭后会通知该窗口
-	afx_msg LRESULT OnSvrStarted(WPARAM wResult, LPARAM lNoUsed);
-	afx_msg LRESULT OnSvrStopped(WPARAM wNoUsed, LPARAM lNoUsed);
+	afx_msg LRESULT OnSrvStarted(WPARAM wResult, LPARAM lNoUsed);
+	afx_msg LRESULT OnSrvStopped(WPARAM wNoUsed, LPARAM lNoUsed);
 
 	//当有socket连接的时候通过该函数来初始化Handler
 	afx_msg LRESULT OnSocketConnect(WPARAM wParam,LPARAM lParam);

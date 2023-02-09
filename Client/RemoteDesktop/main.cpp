@@ -19,7 +19,7 @@ extern "C" __declspec(dllexport) void  ModuleEntry(char* szServerAddr, unsigned 
 #ifdef _DEBUG
 int main(){
 	CIOCPClient::SocketInit();
-	ModuleEntry("49.235.129.40", 10086, 0);
+	ModuleEntry("192.168.0.112", 10086, 0);
 	CIOCPClient::SocketTerm();
 	return 0;
 }

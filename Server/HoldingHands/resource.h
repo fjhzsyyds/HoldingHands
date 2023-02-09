@@ -159,13 +159,15 @@
 #define ID_SESSION_DISCONNECT32860      32860
 #define ID_SESSION_EXIT                 32861
 #define ID_LOG_CLEAR                    32862
+#define ID_CONNECTIONS_DISCONNECTALL    32863
+#define ID_CONNECTIONS_DISCONNECT       32864
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        350
-#define _APS_NEXT_COMMAND_VALUE         32863
+#define _APS_NEXT_COMMAND_VALUE         32865
 #define _APS_NEXT_CONTROL_VALUE         1025
 #define _APS_NEXT_SYMED_VALUE           310
 #endif
